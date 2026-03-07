@@ -1,25 +1,25 @@
 """
-main.py – Build the Jacobi HPC executables with CMake and submit one SLURM
-job per (case, grid_size, omp_threads, mpi_processes) combination.
+main.py – Build the Jacobi executables with CMake, submit all sweep jobs,
+then submit a dependent plot job.  Meant to be run inside a SLURM job
+(via submit_pipeline.sh) so nothing computationally heavy runs on the login node.
 
-Environment variables (all optional):
-  BUILD_DIR        – CMake build directory (default: build)
-  TIMING_CSV       – Path to the shared CSV for results (default: timing_results.csv)
-  SLURM_PARTITION  – Partition to use (default: regular)
-  SLURM_ACCOUNT    – Account / project code  (default: empty)
-  SLURM_TIME       – Wall-time per job        (default: 00:30:00)
+Usage (from login node):
+    sbatch submit_pipeline.sh
+
+Optional environment overrides:
+    BUILD_DIR, TIMING_CSV, SLURM_PARTITION, SLURM_ACCOUNT, SLURM_TIME
+
+Dry-run (inspect scripts without submitting):
+    python main.py --dry-run
 """
 
-from analysis import plot_all_grids, load_results
 import subprocess
 import numpy as np
 import os
 import sys
 import textwrap
-import time
 from pathlib import Path
 from constants_analysis import (
-    CASES_PARALLELISM,
     BUILD_DIR,
     CSV_PATH,
     SLURM_PARTITION,
@@ -93,7 +93,6 @@ def _make_omp_script(exe: str, nx: int, ny: int, omp_threads: int, csv_abs: str)
 def _make_omp_mpi_script(
     exe: str, nx: int, ny: int, mpi_procs: int, omp_threads: int, csv_abs: str
 ) -> str:
-    total_cores = mpi_procs * omp_threads
     return textwrap.dedent(f"""\
         #!/bin/bash
         #SBATCH --job-name=jacobi_ompmpi_{nx}x{ny}_p{mpi_procs}_t{omp_threads}
@@ -111,20 +110,18 @@ def _make_omp_mpi_script(
     """)
 
 
-def submit_job(script_content: str, dry_run: bool = False) -> str | None:
-    """Write a temporary batch script and submit it; return the job-id string."""
-    script_path = "tmp_slurm_job.sh"
+def submit_job(script_content: str, dry_run: bool = False, extra_sbatch_args: list[str] | None = None) -> str | None:
+    """Write a batch script to a temp file, submit it, return the job-id string."""
+    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_tmp_job.sh")
     with open(script_path, "w") as f:
         f.write(script_content)
     if dry_run:
-        print(f"[dry-run] Would submit:\n{script_content}")
+        print(f"[dry-run]\n{script_content}")
         return None
-    result = subprocess.run(
-        ["sbatch", script_path], capture_output=True, text=True, check=True
-    )
+    cmd = ["sbatch"] + (extra_sbatch_args or []) + [script_path]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     os.remove(script_path)
-    job_id = result.stdout.strip().split()[-1]
-    return job_id
+    return result.stdout.strip().split()[-1]
 
 
 # ---------------------------------------------------------------------------
@@ -134,9 +131,11 @@ def submit_job(script_content: str, dry_run: bool = False) -> str | None:
 if __name__ == "__main__":
     dry_run = "--dry-run" in sys.argv
 
-    # ---- 1. Build -------------------------------------------------------
     script_dir = os.path.dirname(os.path.abspath(__file__))
     build_abs  = os.path.join(script_dir, BUILD_DIR)
+    csv_abs    = os.path.abspath(CSV_PATH)
+
+    # ---- 1. Build -------------------------------------------------------
     cmake_build(build_abs, source_dir=script_dir)
 
     # Absolute paths to executables
@@ -146,25 +145,21 @@ if __name__ == "__main__":
         "omp_mpi":  os.path.join(build_abs, "jacobi_omp_mpi"),
     }
 
-    csv_abs = os.path.abspath(CSV_PATH)
-
     # ---- 2. Parameter sweeps -------------------------------------------
-    sizes_grid          = list(np.linspace(100, 1000, 2).astype(int))
+    sizes_grid           = list(np.linspace(100, 1000, 2).astype(int))
     number_mpi_processes = [1, 2, 4, 8, 16, 32, 64]
-    number_omp_threads  = [1, 2, 4, 8, 16, 32, 64]
+    number_omp_threads   = [1, 2, 4, 8, 16, 32, 64]
 
     job_ids: list[str] = []
 
     for nx in sizes_grid:
-        ny = nx   # square grids
-        # --- case: none (serial) ---
+        ny = nx
         script = _make_serial_script(exe["none"], nx, ny, csv_abs)
         jid = submit_job(script, dry_run=dry_run)
         if jid:
             job_ids.append(jid)
             print(f"[none]     nx={nx} ny={ny}  → job {jid}")
 
-        # --- case: just_omp ---
         for nthreads in number_omp_threads:
             script = _make_omp_script(exe["just_omp"], nx, ny, nthreads, csv_abs)
             jid = submit_job(script, dry_run=dry_run)
@@ -172,7 +167,6 @@ if __name__ == "__main__":
                 job_ids.append(jid)
                 print(f"[just_omp] nx={nx} ny={ny} threads={nthreads}  → job {jid}")
 
-        # --- case: omp_mpi ---
         for nprocs in number_mpi_processes:
             for nthreads in number_omp_threads:
                 script = _make_omp_mpi_script(
@@ -181,41 +175,29 @@ if __name__ == "__main__":
                 jid = submit_job(script, dry_run=dry_run)
                 if jid:
                     job_ids.append(jid)
-                    print(
-                        f"[omp_mpi]  nx={nx} ny={ny} "
-                        f"procs={nprocs} threads={nthreads}  → job {jid}"
-                    )
+                    print(f"[omp_mpi]  nx={nx} ny={ny} procs={nprocs} threads={nthreads}  → job {jid}")
 
-    # ---- 3. Wait for all jobs, then plot --------------------------------
+    # ---- 3. Submit plot job with dependency on ALL sweep jobs -----------
+    # SLURM runs it automatically once every sweep job has completed.
     if job_ids and not dry_run:
-        print(f"\nSubmitted {len(job_ids)} jobs. Waiting for completion ...")
-        # Poll sacct every 30 s until all jobs have finished
-        pending = set(job_ids)
-        while pending:
-            time.sleep(30)
-            finished = set()
-            for jid in pending:
-                r = subprocess.run(
-                    ["sacct", "-j", jid, "--format=State", "--noheader", "-P"],
-                    capture_output=True, text=True,
-                )
-                states = {s.strip() for s in r.stdout.splitlines() if s.strip()}
-                terminal = {"COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "OUT_OF_MEMORY"}
-                if states and states.issubset(terminal):
-                    finished.add(jid)
-            pending -= finished
-            if pending:
-                print(f"  {len(pending)} jobs still running …")
-        print("All jobs finished.")
-
-    # ---- 4. Generate plots ----------------------------------------------
-    if os.path.isfile(csv_abs):
-        print("Generating plots ...")
-        df = load_results(csv_abs)
+        dep = "afterok:" + ":".join(job_ids)
         plots_dir = os.path.join(script_dir, "plots")
-        plot_all_grids(df, output_dir=plots_dir)
-        print(f"Plots saved to {plots_dir}")
-    else:
-        print(f"CSV not found at {csv_abs}; skipping plots.")
+        plot_script = textwrap.dedent(f"""\
+            #!/bin/bash
+            #SBATCH --job-name=jacobi_plot
+            #SBATCH --partition={SLURM_PARTITION}
+            {_account_line(SLURM_ACCOUNT)}\
+            #SBATCH --nodes=1
+            #SBATCH --ntasks=1
+            #SBATCH --cpus-per-task=1
+            #SBATCH --time=00:10:00
+            #SBATCH --output=jacobi_plot_%j.out
+
+            python {script_dir}/analysis.py
+        """)
+        jid = submit_job(plot_script, dry_run=dry_run, extra_sbatch_args=[f"--dependency={dep}"])
+        print(f"[plot]     → job {jid}  (starts after all {len(job_ids)} sweep jobs)")
+    elif dry_run:
+        print("[dry-run] Would submit plot job with --dependency=afterok:<all_ids>")
 
     
