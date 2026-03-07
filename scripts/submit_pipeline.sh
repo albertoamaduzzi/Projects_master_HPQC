@@ -6,7 +6,7 @@
 #   SLURM_PARTITION=debug SLURM_ACCOUNT=myproj sbatch submit_pipeline.sh
 
 #SBATCH --job-name=jacobi_pipeline
-#SBATCH --partition=${SLURM_PARTITION:-regular}
+#SBATCH --partition=lrd_all_serial
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
