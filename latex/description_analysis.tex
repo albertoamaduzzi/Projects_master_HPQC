@@ -1,0 +1,507 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  breaklines=true,
+  frame=single,
+  language=C
+}
+
+\title{\textbf{Jacobi Iteration on a 2D Grid:\\
+  Serial, OpenMP, and Hybrid MPI+OpenMP Parallelisation}}
+\author{}
+\date{March 2026}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{The Numerical Problem}
+% ============================================================
+
+\subsection{Governing equation}
+
+The benchmark solves the two-dimensional \emph{steady-state Laplace equation}
+\begin{equation}
+  \nabla^2 u(x,y)
+  \;=\;
+  \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2}
+  \;=\; 0,
+  \qquad (x,y)\in\Omega \subset \mathbb{R}^2,
+  \label{eq:laplace}
+\end{equation}
+subject to Dirichlet boundary conditions on the rectangular domain~$\Omega$.
+Equation~\eqref{eq:laplace} models, among other phenomena, steady heat conduction
+and electrostatic potential in source-free regions.
+
+\subsection{Discretisation}
+
+The domain is discretised on a uniform $N_x \times N_y$ grid with grid spacing
+$h$ in both directions.  Including one layer of boundary (halo) cells, the
+computational array has size $(N_x+2)\times(N_y+2)$ and is stored in row-major
+(C) order as a flat 1D \texttt{double} array.  The linear index of cell $(i,j)$
+is
+\begin{equation}
+  k(i,j) = i\,(N_y+2) + j,
+  \qquad 0 \le i \le N_x+1,\quad 0 \le j \le N_y+1.
+\end{equation}
+
+\subsection{Jacobi iterative scheme}
+
+At each iteration the interior values are updated via the five-point stencil
+\begin{equation}
+  u^{(t+1)}_{i,j}
+  \;=\;
+  \frac{1}{4}\!\left(
+    u^{(t)}_{i-1,j} + u^{(t)}_{i+1,j}
+    + u^{(t)}_{i,j-1} + u^{(t)}_{i,j+1}
+  \right),
+  \qquad 1 \le i \le N_x,\; 1 \le j \le N_y.
+  \label{eq:jacobi}
+\end{equation}
+The method requires two grids (\texttt{grid} and \texttt{grid\_new}); after
+each sweep the new values are copied back to the active grid.
+
+\subsection{Boundary conditions}
+
+The four sides are assigned fixed values:
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Boundary & Value \\
+\midrule
+Top ($i=0$)         & \texttt{TOP}    = 1.0 \\
+Bottom ($i=N_x+1$)  & \texttt{BOTTOM} = 10.0 \\
+Left ($j=0$)        & \texttt{LEFT}   = 1.0 \\
+Right ($j=N_y+1$)   & \texttt{RIGHT}  = 1.0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Convergence criterion}
+
+Iterations stop when the relative residual norm falls below a tolerance
+$\varepsilon = 10^{-4}$, or after a maximum of $5\times10^5$ iterations.
+The residual is computed before each sweep as
+\begin{equation}
+  r^{(t)}
+  \;=\;
+  \sqrt{
+    \sum_{i=1}^{N_x}\sum_{j=1}^{N_y}
+    \left( 4\,u^{(t)}_{i,j}
+           - u^{(t)}_{i-1,j} - u^{(t)}_{i+1,j}
+           - u^{(t)}_{i,j-1} - u^{(t)}_{i,j+1}
+    \right)^2
+  },
+  \label{eq:residual}
+\end{equation}
+and convergence is declared when $r^{(t)}/r^{(0)} < \varepsilon$.
+
+% ============================================================
+\section{Code Structure and Implementation}
+% ============================================================
+
+Three C99 executables are provided, sharing the same CLI
+\texttt{./jacobi{\_}* <NX> <NY>}.
+All functions are declared in a companion \texttt{.h} header so that the
+\texttt{.c} translation unit contains only \texttt{main}.
+
+\subsection{Serial baseline (\texttt{jacobi})}
+
+The header \texttt{jacobi.h} provides four functions called in sequence:
+
+\begin{enumerate}
+  \item \textbf{\texttt{fill\_boundary\_grid}} --- sets the four boundary rows/columns
+        in both \texttt{grid} and \texttt{grid\_new}.
+  \item \textbf{\texttt{fill\_grid\_withouth\_boundary}} --- zero-initialises all
+        interior cells.
+  \item \textbf{\texttt{update}} --- performs one Jacobi sweep
+        (equation~\eqref{eq:jacobi}).
+  \item \textbf{\texttt{check\_convergence}} --- evaluates the sum of squared
+        residuals (equation~\eqref{eq:residual}), without the square root, so
+        that the caller can accumulate contributions from multiple sub-domains.
+\end{enumerate}
+
+Wall-clock timing is obtained via
+\texttt{clock\_gettime(CLOCK\_MONOTONIC)}, which gives nanosecond resolution
+and is unaffected by system-clock adjustments.
+
+\subsection{OpenMP version (\texttt{jacobi\_just\_omp})}
+
+The header \texttt{jacobi\_just\_omp.h} parallelises the two compute-intensive
+kernels with OpenMP pragmas:
+
+\begin{lstlisting}[language=C, caption={OpenMP loop parallelism in \texttt{update}.}]
+#pragma omp parallel for private(i, j, k)
+for (i = 1; i <= nx; i++) {
+    for (j = 1; j <= ny; j++) {
+        k = (ny+2)*i + j;
+        grid_new[k] = 0.25 * (grid[k-1] + grid[k+1]
+                             + grid[k-(ny+2)] + grid[k+(ny+2)]);
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=C, caption={Race-condition-safe reduction in \texttt{check\_convergence}.}]
+#pragma omp parallel for private(i,j,k) reduction(+:tmpnorm)
+for (i = 1; i <= nx; i++) {
+    for (j = 1; j <= ny; j++) { ... tmpnorm += diff*diff; }
+}
+\end{lstlisting}
+
+The \texttt{reduction(+:tmpnorm)} clause lets each thread accumulate into a
+private copy; OpenMP merges the copies at the end of the parallel region,
+eliminating any data race on the accumulator.
+Timing is performed with \texttt{omp\_get\_wtime()}, called exclusively from the
+master thread before and after each parallel region to avoid concurrent writes
+to the timing variables.
+
+\subsection{Hybrid MPI+OpenMP version (\texttt{jacobi\_omp\_mpi})}
+
+\subsubsection{Domain decomposition}
+
+The $N_x$ rows are partitioned into contiguous 1D strips among $P$ MPI ranks.
+Rank $r$ owns
+\begin{equation}
+  \textit{local\_nx}(r)
+  = \left\lfloor \tfrac{N_x}{P} \right\rfloor
+  + \mathbf{1}[r < N_x \bmod P],
+\end{equation}
+so remainder rows are distributed among the lowest-rank processes, keeping
+load imbalance to at most one row.
+Each rank allocates
+$(\textit{local\_nx}+2)\times(N_y+2)$ doubles, where the extra two rows are
+\emph{ghost (halo) rows} storing data received from neighbouring ranks.
+
+\subsubsection{Halo exchange}
+
+After the convergence check and before each \texttt{update}, a non-blocking
+halo exchange is performed:
+
+\begin{lstlisting}[language=C, caption={Non-blocking halo exchange (excerpt).}]
+MPI_Isend(&grid[1*(ny+2)],          ny+2, MPI_DOUBLE, rank-1, 0, ...);
+MPI_Irecv(&grid[0*(ny+2)],          ny+2, MPI_DOUBLE, rank-1, 1, ...);
+MPI_Isend(&grid[local_nx*(ny+2)],   ny+2, MPI_DOUBLE, rank+1, 1, ...);
+MPI_Irecv(&grid[(local_nx+1)*(ny+2)], ny+2, MPI_DOUBLE, rank+1, 0, ...);
+MPI_Waitall(req_cnt, reqs, MPI_STATUSES_IGNORE);
+\end{lstlisting}
+
+Using \texttt{MPI\_Isend}/\texttt{MPI\_Irecv} instead of blocking variants
+avoids deadlock regardless of process ordering and allows the MPI library to
+pipeline transfers.
+
+\subsubsection{Global residual}
+
+Each rank computes a \emph{local} squared residual (the sum of squared
+differences over its own rows, without the square root).
+\texttt{MPI\_Allreduce(MPI\_SUM)} accumulates these across all ranks;
+the global square root is then taken exactly once:
+\begin{equation}
+  r^{(t)}_{\text{global}}
+  = \sqrt{\sum_{p=0}^{P-1} r^{(t)}_{\text{local},\,p}}.
+\end{equation}
+This matches the serial formula \eqref{eq:residual} exactly.
+
+\subsubsection{Thread safety}
+
+\texttt{MPI\_Init\_thread} is called with the
+\texttt{MPI\_THREAD\_FUNNELED} level, guaranteeing that only the master thread
+issues MPI calls.  All \texttt{\#pragma omp parallel for collapse(2)} and
+\texttt{reduction} pragmas are confined inside functions in
+\texttt{jacobi\_omp\_mpi.h}; MPI calls in \texttt{main} remain strictly
+outside any parallel region.
+
+\subsubsection{Timing}
+
+Each rank measures its own elapsed times with \texttt{MPI\_Wtime()}.
+Before writing the CSV, \texttt{MPI\_Reduce(MPI\_MAX, root=0)} collects
+the \emph{bottleneck} (slowest rank) time for each function.  
+Only rank~0 opens and writes the output file, preventing concurrent file access.
+
+% ============================================================
+\section{Build System}
+% ============================================================
+
+All three targets are declared in a single \texttt{CMakeLists.txt}
+with dependency sets that grow with the level of parallelism:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+CMake target       & Source file          & Linked libraries \\
+\midrule
+\texttt{jacobi}         & \texttt{jacobi.c}         & \texttt{m}, \texttt{rt} \\
+\texttt{jacobi\_just\_omp}  & \texttt{jacobi\_just\_omp.c}  & \texttt{m}, \texttt{OpenMP::OpenMP\_C} \\
+\texttt{jacobi\_omp\_mpi}   & \texttt{jacobi\_omp\_mpi.c}   & \texttt{m}, \texttt{OpenMP::OpenMP\_C}, \texttt{MPI::MPI\_C} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+The global compiler flag \texttt{-O3} applies to all targets.
+\texttt{find\_package(OpenMP REQUIRED)} and \texttt{find\_package(MPI REQUIRED)}
+ensure portability across HPC toolchains without hard-coding paths.
+
+% ============================================================
+\section{Timing and Output Format}
+% ============================================================
+
+Every executable appends one row to a shared CSV file whose path is
+read from the environment variable \texttt{TIMING\_CSV} (default:
+\texttt{timing\_results.csv}).  The header is written only when the file
+is empty, so repeated runs accumulate safely without duplication.
+
+The CSV schema is:
+\begin{verbatim}
+case, nx, ny, number_omp_threads, number_mpi_processes,
+fill_boundary_grid_time, fill_grid_without_boundary_time,
+update_time, check_convergence_time, total_time, iterations
+\end{verbatim}
+
+\begin{itemize}
+  \item \texttt{total\_time} spans from grid allocation to \texttt{free()}.
+  \item \texttt{update\_time} and \texttt{check\_convergence\_time} are
+        \emph{cumulative} across all iterations.
+  \item For the MPI variant, all times are the per-function maximum over ranks
+        (\texttt{MPI\_Reduce(MPI\_MAX)}), reflecting the true wall-clock
+        bottleneck.
+\end{itemize}
+
+% ============================================================
+\section{Benchmark Campaign via SLURM}
+% ============================================================
+
+The Python driver \texttt{main.py} automates the full benchmark pipeline:
+
+\begin{enumerate}
+  \item \textbf{CMake build} --- configures and compiles all targets in a
+        \texttt{build/} subdirectory inside the scripts folder.
+  \item \textbf{Parameter sweep} --- generates one SLURM batch script per
+        combination of:
+        \begin{itemize}
+          \item grid sizes: $100\times100$ to $950\times950$ in steps of~50
+                (19 sizes);
+          \item OMP threads per rank ($T$): $1,2,4,8,16,32,64$;
+          \item MPI ranks ($P$): $1,2,4,8,16,32,64$ (only for \texttt{omp\_mpi}).
+        \end{itemize}
+        The total job count is $19\cdot(1 + 7 + 7^2) = 19\cdot57 = 1083$ jobs.
+  \item \textbf{Job monitoring} --- \texttt{sacct} is polled every 30\,s until
+        every job reaches a terminal state.
+  \item \textbf{Plot generation} --- calls \texttt{analysis.py} to produce all
+        figures described in Section~\ref{sec:analysis}.
+\end{enumerate}
+
+All SLURM parameters (\texttt{SLURM\_PARTITION}, \texttt{SLURM\_ACCOUNT},
+\texttt{SLURM\_TIME}) and the CSV path are overridable via environment
+variables without modifying source code.  A \texttt{--dry-run} flag prints
+all batch scripts without submitting, for inspection on a login node.
+
+% ============================================================
+\section{Performance Analysis}
+\label{sec:analysis}
+% ============================================================
+
+\subsection{Methodology}
+
+The Python module \texttt{analysis.py} reads the timing CSV with
+\texttt{pandas} and produces one figure per timing column per grid size.
+On every plot:
+\begin{itemize}
+  \item the \textbf{x-axis} is the number of OMP threads per MPI rank;
+  \item each \textbf{line} corresponds to a unique \texttt{(case, \#MPI~ranks)}
+        combination, averaged over repeated measurements at the same
+        configuration;
+  \item the \textbf{legend label} is formatted as \texttt{<case> (mpi=<P>)}.
+\end{itemize}
+This layout simultaneously exposes
+\emph{strong intra-node scaling} (varying $T$ at fixed grid size) and
+\emph{inter-node scaling} (comparing lines at different~$P$).
+
+\subsection{Total time}
+
+Figure~\ref{fig:total_100} through Figure~\ref{fig:total_950} show
+\texttt{total\_time} for three representative grid sizes.
+The serial baseline (label \texttt{none, mpi=1}) provides the reference.
+Strong-scaling efficiency for the hybrid runs is defined as
+\begin{equation}
+  E(P,T) = \frac{t_{\text{serial}}}{P\cdot T\cdot t(P,T)},
+\end{equation}
+where $t_{\text{serial}}$ is the single-thread serial time and $t(P,T)$ is
+the wall time with $P$~ranks and $T$~threads each.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.82\textwidth]{../plots/total_time_100x100.png}
+  \caption{Total wall-clock time vs.\ OMP thread count for a
+           $100\times100$ grid.}
+  \label{fig:total_100}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.82\textwidth]{../plots/total_time_500x500.png}
+  \caption{Total wall-clock time vs.\ OMP thread count for a
+           $500\times500$ grid.}
+  \label{fig:total_500}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.82\textwidth]{../plots/total_time_950x950.png}
+  \caption{Total wall-clock time vs.\ OMP thread count for a
+           $950\times950$ grid.}
+  \label{fig:total_950}
+\end{figure}
+
+\subsection{Kernel breakdown}
+
+The four per-function timing plots allow identifying which phase limits scaling.
+
+\subsubsection{\texttt{update} kernel}
+
+The Jacobi sweep (equation~\eqref{eq:jacobi}) dominates the total runtime for
+large grids because it is called at every iteration and performs $\mathcal{O}(N_x
+N_y)$ floating-point operations with good spatial locality.
+Figures~\ref{fig:update_100}--\ref{fig:update_950} show how its time varies
+with parallelism.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \includegraphics[width=\textwidth]{../plots/update_time_100x100.png}
+    \caption{$100\times100$}
+    \label{fig:update_100}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \includegraphics[width=\textwidth]{../plots/update_time_950x950.png}
+    \caption{$950\times950$}
+    \label{fig:update_950}
+  \end{subfigure}
+  \caption{\texttt{update\_time}: cumulative time spent in the Jacobi sweep.
+           For large grids the hybrid version is expected to scale well because
+           each rank works on a reduced number of rows while OMP threads
+           parallelise the inner loop.}
+\end{figure}
+
+\subsubsection{\texttt{check\_convergence} kernel}
+
+The residual computation has the same $\mathcal{O}(N_x N_y)$ cost per call as
+\texttt{update}, but the MPI variant introduces an
+\texttt{MPI\_Allreduce} synchronisation barrier at every iteration.
+For small grids this latency can dominate; for large grids the local
+computation hides it.
+Figures~\ref{fig:conv_100}--\ref{fig:conv_950} illustrate the crossover.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \includegraphics[width=\textwidth]{../plots/check_convergence_time_100x100.png}
+    \caption{$100\times100$}
+    \label{fig:conv_100}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \includegraphics[width=\textwidth]{../plots/check_convergence_time_950x950.png}
+    \caption{$950\times950$}
+    \label{fig:conv_950}
+  \end{subfigure}
+  \caption{\texttt{check\_convergence\_time}: cumulative time in the
+           residual computation.  The MPI synchronisation overhead is visible
+           as a floor that does not decrease with more OMP threads.}
+\end{figure}
+
+\subsubsection{Initialisation kernels}
+
+\texttt{fill\_boundary\_grid} and \texttt{fill\_grid\_withouth\_boundary}
+are called once and are therefore negligible fractions of the total time for
+any non-trivial number of iterations.
+They are included nevertheless to verify that the parallelisation of the
+initialisation phase does not introduce overhead relative to the serial
+baseline (Figures~\ref{fig:fill_bnd}--\ref{fig:fill_int}).
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \includegraphics[width=\textwidth]{../plots/fill_boundary_grid_time_500x500.png}
+    \caption{\texttt{fill\_boundary\_grid}}
+    \label{fig:fill_bnd}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \includegraphics[width=\textwidth]{../plots/fill_grid_without_boundary_time_500x500.png}
+    \caption{\texttt{fill\_grid\_without\_boundary}}
+    \label{fig:fill_int}
+  \end{subfigure}
+  \caption{Initialisation times for a $500\times500$ grid.  Both are one-shot
+           costs independent of the iteration count and are expected to be much
+           smaller than the solver kernels.}
+\end{figure}
+
+\subsection{Expected scaling behaviour}
+
+\paragraph{Serial vs.\ OpenMP.}
+For $T$ threads Amdahl's law predicts a speed-up upper bound of
+$S(T) \le 1/(f_s + (1-f_s)/T)$, where $f_s$ is the serial fraction
+(boundary setup, \texttt{memcpy}, loop overhead).
+For large grids $f_s \ll 1$ and near-linear scaling is expected up to
+the point where the problem fits in the last-level cache.
+Beyond that, memory bandwidth becomes the bottleneck and scaling saturates.
+
+\paragraph{MPI strong scaling.}
+With $P$ ranks each processing $N_x/P$ rows, the computation scales as
+$\mathcal{O}(N_x N_y / P)$, while the halo-exchange cost per iteration is
+$\mathcal{O}(N_y)$ (one row per neighbour).
+For fixed $N_x N_y$, increasing $P$ reduces computation but keeps communication
+constant, so an efficiency drop is expected as $P \to N_x$.
+
+\paragraph{Hybrid MPI+OpenMP.}
+The hybrid configuration is expected to outperform pure MPI for a fixed total
+process count $P\cdot T$, because replacing $T$ MPI ranks within a node with
+$T$ OMP threads eliminates intra-node message passing.
+In practice the optimal split depends on memory-bandwidth saturation and
+network latency; the plots in this section expose these trade-offs empirically.
+
+% ============================================================
+\section{Conclusions}
+% ============================================================
+
+The repository provides a self-contained benchmark that covers the full
+lifecycle of an HPC study: from a cleanly formulated numerical problem
+(2D Laplace / Jacobi iteration), through three implementations of increasing
+parallelism (serial, shared-memory OMP, distributed+shared MPI+OMP), to an
+automated benchmark campaign on a SLURM cluster and a quantitative
+performance analysis.
+
+The key findings anticipated from the experimental plots are:
+\begin{enumerate}
+  \item The \texttt{update} kernel dominates total time for large grids and
+        is the primary beneficiary of both OMP and MPI parallelism.
+  \item The \texttt{check\_convergence} residual under the MPI variant
+        exhibits a communication floor set by \texttt{MPI\_Allreduce} latency,
+        visible at small grid sizes.
+  \item Hybrid configurations reduce intra-node traffic and are expected to
+        achieve higher efficiency than pure MPI at equivalent total core counts
+        on shared-memory nodes.
+  \item Initialisation costs are negligible fractions of total time for the
+        grid-size range explored.
+\end{enumerate}
+
+\end{document}
