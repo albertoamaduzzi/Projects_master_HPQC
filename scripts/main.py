@@ -1,44 +1,43 @@
 """
-main.py – Build the Jacobi executables with CMake, submit all sweep jobs,
-then submit a dependent plot job.  Meant to be run inside a SLURM job
-(via submit_pipeline.sh) so nothing computationally heavy runs on the login node.
+main.py – Build the Jacobi executables with CMake, run the full parameter
+sweep directly inside the current SLURM allocation, then generate plots.
+
+The previous approach of submitting individual sub-jobs cannot work on
+Leonardo because the lrd_all_serial QOS only allows MaxJobsPU=2 (two
+queued jobs per user at a time).  Running everything sequentially inside
+one pipeline job sidesteps the limit entirely.
 
 Usage (from login node):
     sbatch submit_pipeline.sh
 
-Optional environment overrides:
-    BUILD_DIR, TIMING_CSV, SLURM_PARTITION, SLURM_ACCOUNT, SLURM_TIME
-
-Dry-run (inspect scripts without submitting):
+Dry-run (print what would be executed without running):
     python main.py --dry-run
 """
 
 import subprocess
+import time
 import numpy as np
 import os
 import sys
-import textwrap
 from pathlib import Path
-from constants_analysis import (
-    BUILD_DIR,
-    CSV_PATH,
-    SLURM_PARTITION,
-    SLURM_ACCOUNT,
-    SLURM_TIME,
-    SLURM_NODES,
-)
+from constants_analysis import BUILD_DIR, CSV_PATH
 
 
 # ---------------------------------------------------------------------------
-# Build helpers
+# Build
 # ---------------------------------------------------------------------------
 
 def cmake_build(build_dir: str, source_dir: str = ".") -> None:
-    """Configure and build all targets with CMake."""
-    Path(build_dir).mkdir(parents=True, exist_ok=True)
+    # Wipe any stale build directory so changed compiler flags take effect.
+    build_path = Path(build_dir)
+    if build_path.exists():
+        import shutil
+        shutil.rmtree(build_dir)
+    build_path.mkdir(parents=True, exist_ok=True)
     print(f"[cmake] Configuring in {build_dir} ...")
     subprocess.run(
-        ["cmake", os.path.abspath(source_dir), "-DCMAKE_BUILD_TYPE=Release"],
+        ["cmake", os.path.abspath(source_dir),
+         "-DCMAKE_BUILD_TYPE=Release", "-DENABLE_GPU_OFFLOAD=ON"],
         cwd=build_dir, check=True,
     )
     print("[cmake] Building ...")
@@ -47,85 +46,35 @@ def cmake_build(build_dir: str, source_dir: str = ".") -> None:
 
 
 # ---------------------------------------------------------------------------
-# SLURM job script generation and submission
+# Direct execution helpers
 # ---------------------------------------------------------------------------
 
-def _account_line(account: str) -> str:
-    return f"#SBATCH --account={account}\n" if account else ""
-
-
-def _make_serial_script(exe: str, nx: int, ny: int, csv_abs: str) -> str:
-    return textwrap.dedent(f"""\
-        #!/bin/bash
-        #SBATCH --job-name=jacobi_none_{nx}x{ny}
-        #SBATCH --partition={SLURM_PARTITION}
-        {_account_line(SLURM_ACCOUNT)}\
-        #SBATCH --nodes=1
-        #SBATCH --ntasks=1
-        #SBATCH --cpus-per-task=1
-        #SBATCH --time={SLURM_TIME}
-        #SBATCH --output=slurm_jacobi_none_{nx}x{ny}_%j.out
-
-        export TIMING_CSV="{csv_abs}"
-        export OMP_NUM_THREADS=1
-        {exe} {nx} {ny}
-    """)
-
-
-def _make_omp_script(exe: str, nx: int, ny: int, omp_threads: int, csv_abs: str) -> str:
-    return textwrap.dedent(f"""\
-        #!/bin/bash
-        #SBATCH --job-name=jacobi_omp_{nx}x{ny}_t{omp_threads}
-        #SBATCH --partition={SLURM_PARTITION}
-        {_account_line(SLURM_ACCOUNT)}\
-        #SBATCH --nodes=1
-        #SBATCH --ntasks=1
-        #SBATCH --cpus-per-task={omp_threads}
-        #SBATCH --time={SLURM_TIME}
-        #SBATCH --output=slurm_jacobi_omp_{nx}x{ny}_t{omp_threads}_%j.out
-
-        export TIMING_CSV="{csv_abs}"
-        export OMP_NUM_THREADS={omp_threads}
-        {exe} {nx} {ny}
-    """)
-
-
-def _make_omp_mpi_script(
-    exe: str, nx: int, ny: int, mpi_procs: int, omp_threads: int, csv_abs: str
-) -> str:
-    return textwrap.dedent(f"""\
-        #!/bin/bash
-        #SBATCH --job-name=jacobi_ompmpi_{nx}x{ny}_p{mpi_procs}_t{omp_threads}
-        #SBATCH --partition={SLURM_PARTITION}
-        {_account_line(SLURM_ACCOUNT)}\
-        #SBATCH --nodes={SLURM_NODES}
-        #SBATCH --ntasks={mpi_procs}
-        #SBATCH --cpus-per-task={omp_threads}
-        #SBATCH --time={SLURM_TIME}
-        #SBATCH --output=slurm_jacobi_ompmpi_{nx}x{ny}_p{mpi_procs}_t{omp_threads}_%j.out
-
-        export TIMING_CSV="{csv_abs}"
-        export OMP_NUM_THREADS={omp_threads}
-        srun --ntasks={mpi_procs} --cpus-per-task={omp_threads} {exe} {nx} {ny}
-    """)
-
-
-def submit_job(script_content: str, dry_run: bool = False, extra_sbatch_args: list[str] | None = None) -> str | None:
-    """Write a batch script to a temp file, submit it, return the job-id string."""
-    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_tmp_job.sh")
-    with open(script_path, "w") as f:
-        f.write(script_content)
+def run_config(label: str, cmd: list[str], env: dict, dry_run: bool = False) -> None:
+    """Run one Jacobi configuration, printing elapsed time."""
     if dry_run:
-        print(f"[dry-run]\n{script_content}")
-        return None
-    cmd = ["sbatch"] + (extra_sbatch_args or []) + [script_path]
-    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    os.remove(script_path)
-    return result.stdout.strip().split()[-1]
+        omp = env.get("OMP_NUM_THREADS", "?")
+        print(f"[dry-run] {label}  OMP={omp}  cmd={' '.join(cmd)}")
+        return
+    print(f"[run] {label} ...", flush=True)
+    t0 = time.monotonic()
+    subprocess.run(cmd, env=env, check=True)
+    print(f"[run] {label} done in {time.monotonic() - t0:.1f}s", flush=True)
+
+# Helper to check for GPU availability. We want to skip GPU runs if no device is present
+def gpu_is_available() -> bool:
+    """Return True only when at least one NVIDIA GPU is reachable."""
+    try:
+        r = subprocess.run(
+            ["nvidia-smi", "-L"],
+            capture_output=True, text=True,
+        )
+        return r.returncode == 0 and "GPU 0" in r.stdout
+    except FileNotFoundError:
+        return False
 
 
 # ---------------------------------------------------------------------------
-# Main entry point
+# Main
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -138,66 +87,92 @@ if __name__ == "__main__":
     # ---- 1. Build -------------------------------------------------------
     cmake_build(build_abs, source_dir=script_dir)
 
-    # Absolute paths to executables
     exe = {
         "none":     os.path.join(build_abs, "jacobi"),
         "just_omp": os.path.join(build_abs, "jacobi_just_omp"),
         "omp_mpi":  os.path.join(build_abs, "jacobi_omp_mpi"),
+        "gpu":      os.path.join(build_abs, "jacobi_gpu"),
     }
 
-    # ---- 2. Parameter sweeps -------------------------------------------
-    sizes_grid           = list(np.linspace(100, 1000, 2).astype(int))
-    number_mpi_processes = [1, 2, 4, 8, 16, 32, 64]
-    number_omp_threads   = [1, 2, 4, 8, 16, 32, 64]
+    # ---- 2. Clear previous results for a clean run ----------------------
+    if not dry_run and os.path.exists(csv_abs):
+        os.remove(csv_abs)
+        print(f"[info] Cleared previous CSV: {csv_abs}")
 
-    job_ids: list[str] = []
+    base_env = {**os.environ, "TIMING_CSV": csv_abs}
 
+    # ---- 3. Parameter grid (all configs stay within 8 CPUs) ------------
+    sizes_grid           = [100, 150, 200, 250, 300, 350, 400]
+    number_omp_threads   = [1, 2, 4, 8]
+    number_mpi_processes = [1, 2, 4, 8]
+
+    # --- 3a. Serial (no parallelism) ------------------------------------
     for nx in sizes_grid:
-        ny = nx
-        script = _make_serial_script(exe["none"], nx, ny, csv_abs)
-        jid = submit_job(script, dry_run=dry_run)
-        if jid:
-            job_ids.append(jid)
-            print(f"[none]     nx={nx} ny={ny}  → job {jid}")
+        env = {**base_env, "OMP_NUM_THREADS": "1"}
+        run_config(
+            f"none     nx={nx}",
+            [exe["none"], str(nx), str(nx)],
+            env, dry_run,
+        )
 
+    # --- 3b. OpenMP only -------------------------------------------------
+    for nx in sizes_grid:
         for nthreads in number_omp_threads:
-            script = _make_omp_script(exe["just_omp"], nx, ny, nthreads, csv_abs)
-            jid = submit_job(script, dry_run=dry_run)
-            if jid:
-                job_ids.append(jid)
-                print(f"[just_omp] nx={nx} ny={ny} threads={nthreads}  → job {jid}")
+            env = {**base_env, "OMP_NUM_THREADS": str(nthreads)}
+            run_config(
+                f"just_omp nx={nx} t={nthreads}",
+                [exe["just_omp"], str(nx), str(nx)],
+                env, dry_run,
+            )
 
+    # --- 3c. Hybrid MPI + OpenMP ----------------------------------------
+    # mpirun --oversubscribe lets us launch more ranks than queued task-slots.
+    for nx in sizes_grid:
         for nprocs in number_mpi_processes:
             for nthreads in number_omp_threads:
-                script = _make_omp_mpi_script(
-                    exe["omp_mpi"], nx, ny, nprocs, nthreads, csv_abs
+                if nprocs * nthreads > 8:   # keep within 8-CPU node budget
+                    continue
+                env = {**base_env, "OMP_NUM_THREADS": str(nthreads)}
+                cmd = [
+                    "mpirun", "-n", str(nprocs), "--oversubscribe",
+                    exe["omp_mpi"], str(nx), str(nx),
+                ]
+                run_config(
+                    f"omp_mpi  nx={nx} p={nprocs} t={nthreads}",
+                    cmd, env, dry_run,
                 )
-                jid = submit_job(script, dry_run=dry_run)
-                if jid:
-                    job_ids.append(jid)
-                    print(f"[omp_mpi]  nx={nx} ny={ny} procs={nprocs} threads={nthreads}  → job {jid}")
 
-    # ---- 3. Submit plot job with dependency on ALL sweep jobs -----------
-    # SLURM runs it automatically once every sweep job has completed.
-    if job_ids and not dry_run:
-        dep = "afterok:" + ":".join(job_ids)
+    # --- 3d. GPU offload (OpenMP target) --------------------------------
+    # Requires a compiler with GPU offload support (NVHPC, Clang, GCC+plugin).
+    # On Leonardo, submit to the GPU partition (boost_usr_prod) with
+    #   #SBATCH --partition=boost_usr_prod  --gres=gpu:1
+    gpu_exe = exe["gpu"]
+
+
+    if dry_run:
+        for nx in sizes_grid:
+            env = {**base_env, "OMP_NUM_THREADS": "1"}
+            run_config(f"gpu      nx={nx}", [gpu_exe, str(nx), str(nx)], env, dry_run)
+    elif not os.path.isfile(gpu_exe):
+        print(f"[warn] GPU executable not found: {gpu_exe}  (skipping GPU runs)")
+    elif not gpu_is_available():
+        print("[warn] No GPU detected on this node (nvidia-smi found no device). "
+              "Skipping GPU runs – submit via submit_gpu_pipeline.sh to boost_usr_prod.")
+    else:
+        for nx in sizes_grid:
+            env = {**base_env, "OMP_NUM_THREADS": "1"}
+            run_config(
+                f"gpu      nx={nx}",
+                [gpu_exe, str(nx), str(nx)],
+                env, dry_run,
+            )
+
+    # ---- 4. Generate plots ----------------------------------------------
+    if not dry_run:
+        from analysis import load_results, plot_methods_comparison, plot_speedup_vs_grid
         plots_dir = os.path.join(script_dir, "plots")
-        plot_script = textwrap.dedent(f"""\
-            #!/bin/bash
-            #SBATCH --job-name=jacobi_plot
-            #SBATCH --partition={SLURM_PARTITION}
-            {_account_line(SLURM_ACCOUNT)}\
-            #SBATCH --nodes=1
-            #SBATCH --ntasks=1
-            #SBATCH --cpus-per-task=1
-            #SBATCH --time=00:10:00
-            #SBATCH --output=jacobi_plot_%j.out
-
-            python {script_dir}/analysis.py
-        """)
-        jid = submit_job(plot_script, dry_run=dry_run, extra_sbatch_args=[f"--dependency={dep}"])
-        print(f"[plot]     → job {jid}  (starts after all {len(job_ids)} sweep jobs)")
-    elif dry_run:
-        print("[dry-run] Would submit plot job with --dependency=afterok:<all_ids>")
-
-    
+        df = load_results(csv_abs)
+        plot_methods_comparison(df, output_dir=plots_dir)
+        plot_speedup_vs_grid(df, output_dir=plots_dir)
+        print(f"[plots] All figures saved to {plots_dir}/")
+        print("[info]  Re-run with --dry-run to preview commands.")

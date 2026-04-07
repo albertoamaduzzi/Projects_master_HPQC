@@ -1,23 +1,22 @@
 #!/bin/bash
-# Submit from the login node:
+# Run from the scripts directory:
+#   cd /path/to/scripts
 #   sbatch submit_pipeline.sh
-#
-# Override any setting before calling sbatch, e.g.:
-#   SLURM_PARTITION=debug SLURM_ACCOUNT=myproj sbatch submit_pipeline.sh
 
 #SBATCH --job-name=jacobi_pipeline
 #SBATCH --partition=lrd_all_serial
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
-#SBATCH --time=00:30:00
-#SBATCH --output=pipeline_%j.out
-#SBATCH --error=pipeline_%j.err
+#SBATCH --cpus-per-task=8
+#SBATCH --time=02:00:00
+#SBATCH --output=%x_%j.out
+#SBATCH --error=%x_%j.err
 
-# ---- adapt these module loads to your cluster ----
-# module purge
-# module load gcc openmpi cmake python
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-python "$SCRIPT_DIR/main.py"
+# SLURM_SUBMIT_DIR is the directory from which sbatch was called.
+# cd there so all relative paths in main.py resolve correctly.
+# ---- adapt module loads to your cluster ----
+module purge
+module load gcc openmpi cmake python nvhpc
+source my_science_env/bin/activate
+python3 main.py
 

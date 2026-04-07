@@ -105,25 +105,44 @@ int main(int argc, char*argv[]) {
 
         if (norm < TOLERANCE) break;
 
-        /* halo exchange – non-blocking to overlap with computation if desired */
+        /* ---- Non-blocking halo exchange ---------------------------------- */
         MPI_Request reqs[4];
         int req_cnt = 0;
 
         if (rank > 0) {
-            MPI_Isend(&grid[1 * (ny + 2)], ny + 2, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, &reqs[req_cnt++]);
-            MPI_Irecv(&grid[0 * (ny + 2)], ny + 2, MPI_DOUBLE, rank - 1, 1, MPI_COMM_WORLD, &reqs[req_cnt++]);
+            MPI_Isend(&grid[1         * (ny+2)], ny+2, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, &reqs[req_cnt++]);
+            MPI_Irecv(&grid[0         * (ny+2)], ny+2, MPI_DOUBLE, rank-1, 1, MPI_COMM_WORLD, &reqs[req_cnt++]);
         }
         if (rank < size - 1) {
-            MPI_Isend(&grid[local_nx * (ny + 2)], ny + 2, MPI_DOUBLE, rank + 1, 1, MPI_COMM_WORLD, &reqs[req_cnt++]);
-            MPI_Irecv(&grid[(local_nx + 1) * (ny + 2)], ny + 2, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, &reqs[req_cnt++]);
+            MPI_Isend(&grid[local_nx  * (ny+2)], ny+2, MPI_DOUBLE, rank+1, 1, MPI_COMM_WORLD, &reqs[req_cnt++]);
+            MPI_Irecv(&grid[(local_nx+1)*(ny+2)], ny+2, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, &reqs[req_cnt++]);
         }
-        MPI_Waitall(req_cnt, reqs, MPI_STATUSES_IGNORE);
 
         t0 = MPI_Wtime();
-        update(grid, grid_new, local_nx, ny);
+        /* ---- Update INTERIOR rows while halos are in flight -------------- *
+         * Rows 2..local_nx-1 only need locally-owned neighbours; they do    *
+         * NOT depend on the ghost rows being received.  We compute them now  *
+         * so the MPI transfer and this work overlap.                         */
+        if (local_nx > 2)
+            update_range(grid, grid_new, ny, 2, local_nx - 1);
+
+        /* Wait for ghost rows 0 and local_nx+1 to arrive */
+        MPI_Waitall(req_cnt, reqs, MPI_STATUSES_IGNORE);
+
+        /* ---- Update BOUNDARY rows (need received halos) ------------------ */
+        update_range(grid, grid_new, ny, 1, 1);
+        if (local_nx > 1)
+            update_range(grid, grid_new, ny, local_nx, local_nx);
         t_update += MPI_Wtime() - t0;
 
-        memcpy(grid, grid_new, sizeof(double) * (local_nx + 2) * (ny + 2));
+        /* Copy only interior rows (1..local_nx), leaving ghost rows 0 and
+         * local_nx+1 intact with the values received via the MPI exchange
+         * above.  Overwriting them here with grid_new's stale zero-initialised
+         * ghost rows would corrupt the residual computed by check_convergence
+         * at the top of the next iteration (the measured norm would grow as
+         * interior values become non-zero while ghost rows stay at 0). */
+        memcpy(&grid[1*(ny+2)], &grid_new[1*(ny+2)],
+               sizeof(double) * local_nx * (ny + 2));
 
         if (rank == 0 && iter % NPRINT == 0) {
             printf("Iteration =%d ,Relative norm=%e\n", iter, norm);

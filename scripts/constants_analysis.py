@@ -1,6 +1,6 @@
 import os
 
-CASES_PARALLELISM = ["none", "just_omp", "omp_mpi"]
+CASES_PARALLELISM = ["none", "just_omp", "omp_mpi", "gpu"]
 
 TIMING_COLUMNS = [
     "fill_boundary_grid_time",
@@ -12,7 +12,7 @@ TIMING_COLUMNS = [
 
 # Path to the shared CSV that all executables append to.
 # Can be overridden via the TIMING_CSV environment variable.
-CSV_PATH = os.environ.get("TIMING_CSV", "timing_results.csv")
+CSV_PATH = os.environ.get("TIMING_CSV", "timing_results_2.csv")
 
 # ---- SLURM / run configuration ----
 BUILD_DIR = os.environ.get("BUILD_DIR", "build")   # CMake build output directory
