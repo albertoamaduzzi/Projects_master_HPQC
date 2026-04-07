@@ -80,11 +80,14 @@ int main(int argc, char*argv[]) {
     int iter;
     for (iter=0; iter<MAX_ITER; iter++) {
 
-        // Convergence check – timing wraps the parallel region inside the function
-        t0 = omp_get_wtime();
-        norm = check_convergence(nx, ny, grid) / bnorm;
-        t_convergence += omp_get_wtime() - t0;
-        if (norm < TOLERANCE) break;
+        /* Convergence: checked every CHECK_EVERY iterations to reduce OMP
+         * reduction overhead.  norm retains its last value between checks. */
+        if (iter % CHECK_EVERY == 0) {
+            t0 = omp_get_wtime();
+            norm = check_convergence(nx, ny, grid) / bnorm;
+            t_convergence += omp_get_wtime() - t0;
+            if (norm < TOLERANCE) break;
+        }
 
         // Update new grid
         t0 = omp_get_wtime();

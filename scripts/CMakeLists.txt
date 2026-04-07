@@ -18,7 +18,7 @@ target_link_libraries(jacobi m rt)
 add_executable(jacobi_just_omp jacobi_just_omp.c)
 target_link_libraries(jacobi_just_omp m OpenMP::OpenMP_C)
 
-# OpenMP + MPI version
+# OpenMP + MPI version (well-structured, using jacobi_omp_mpi.h)
 add_executable(jacobi_omp_mpi jacobi_omp_mpi.c)
 target_link_libraries(jacobi_omp_mpi m OpenMP::OpenMP_C MPI::MPI_C)
 

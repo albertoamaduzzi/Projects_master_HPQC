@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <omp.h>
+#include <constants_jacobi.h>
 
 /*
  * Design notes
@@ -26,8 +27,8 @@ void fill_boundary_grid(double *grid, double *grid_new,
                         int local_nx, int ny, int rank, int size)
 {
     /* Resolve rank-dependent values once — no branching inside loops. */
-    const double top_val    = (rank == 0)        ? 1.0 : 0.0;
-    const double bottom_val = (rank == size - 1) ? 1.0 : 0.0;
+    const double top_val    = (rank == 0)        ? TOP    : 0.0;
+    const double bottom_val = (rank == size - 1) ? BOTTOM : 0.0;
 
     /* Ghost rows: top (row 0) and bottom (row local_nx+1) */
     #pragma omp parallel for schedule(static)
@@ -40,10 +41,10 @@ void fill_boundary_grid(double *grid, double *grid_new,
     /* Physical left/right boundaries (all ranks own these columns) */
     #pragma omp parallel for schedule(static)
     for (int i = 0; i <= local_nx + 1; ++i) {
-        grid    [i*(ny+2) + 0]      = 1.0;
-        grid    [i*(ny+2) + ny+1]   = 1.0;
-        grid_new[i*(ny+2) + 0]      = 1.0;
-        grid_new[i*(ny+2) + ny+1]   = 1.0;
+        grid    [i*(ny+2) + 0]      = LEFT;
+        grid_new[i*(ny+2) + 0]      = LEFT;
+        grid    [i*(ny+2) + ny+1]   = RIGHT;
+        grid_new[i*(ny+2) + ny+1]   = RIGHT;
     }
 }
 
@@ -80,16 +81,20 @@ void update(double *grid, double *grid_new, int local_nx, int ny)
     update_range(grid, grid_new, ny, 1, local_nx);
 }
 
-double check_convergence(int local_nx, int ny, double *grid)
+/* Local residual sum-of-squares — no sqrt, no MPI.
+ * Caller must: MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_SUM, ...)
+ *              then norm = sqrt(global) / bnorm.                          */
+double check_convergence_local(int local_nx, int ny, const double *grid)
 {
     double temp = 0.0;
     #pragma omp parallel for collapse(2) schedule(static) reduction(+:temp)
     for (int i = 1; i <= local_nx; ++i) {
         for (int j = 1; j <= ny; ++j) {
-            double diff = 0.25 * (
+            const int k = i*(ny+2)+j;
+            const double diff = 0.25 * (
                 grid[(i-1)*(ny+2)+j] + grid[(i+1)*(ny+2)+j] +
                 grid[i*(ny+2)+(j-1)] + grid[i*(ny+2)+(j+1)]
-            ) - grid[i*(ny+2)+j];
+            ) - grid[k];
             temp += diff * diff;
         }
     }

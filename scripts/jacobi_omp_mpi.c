@@ -66,8 +66,8 @@ int main(int argc, char*argv[]) {
                nx, ny, size, omp_threads);
     }
 
-    double *grid = (double*)malloc(sizeof(double) * (local_nx + 2) * (ny + 2));
-    double *grid_new = (double*)malloc(sizeof(double) * (local_nx + 2) * (ny + 2));
+    double *grid     = (double*)calloc((local_nx + 2) * (ny + 2), sizeof(double));
+    double *grid_new = (double*)calloc((local_nx + 2) * (ny + 2), sizeof(double));
 
     /* ---- per-rank timing accumulators ---- */
     double t_fill_boundary = 0.0, t_fill_interior = 0.0;
@@ -86,7 +86,7 @@ int main(int argc, char*argv[]) {
 
     double bnorm = 0.0;
     t0 = MPI_Wtime();
-    double local_bnorm = check_convergence(local_nx, ny, grid);
+    double local_bnorm = check_convergence_local(local_nx, ny, grid);
     t_convergence += MPI_Wtime() - t0;
     MPI_Allreduce(&local_bnorm, &bnorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
     bnorm = sqrt(bnorm);
@@ -96,14 +96,18 @@ int main(int argc, char*argv[]) {
     double local_norm = 0.0;
 
     for (iter = 0; iter < MAX_ITER; iter++) {
-        t0 = MPI_Wtime();
-        local_norm = check_convergence(local_nx, ny, grid);
-        t_convergence += MPI_Wtime() - t0;
+        /* Convergence: checked every CHECK_EVERY iterations, but never at
+         * iter==0 (that would recompute bnorm itself, giving norm/bnorm=1).
+         * norm retains its last computed value between checks.            */
+        if (iter > 0 && iter % CHECK_EVERY == 0) {
+            t0 = MPI_Wtime();
+            local_norm = check_convergence_local(local_nx, ny, grid);
+            t_convergence += MPI_Wtime() - t0;
 
-        MPI_Allreduce(&local_norm, &norm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        norm = sqrt(norm) / bnorm;
-
-        if (norm < TOLERANCE) break;
+            MPI_Allreduce(&local_norm, &norm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            norm = sqrt(norm) / bnorm;
+            if (norm < TOLERANCE) break;
+        }
 
         /* ---- Non-blocking halo exchange ---------------------------------- */
         MPI_Request reqs[4];

@@ -27,23 +27,27 @@ Loading python/3.11.7
 -- Found MPI_C: /leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-12.2.0/openmpi-4.1.6-jnvfio5kii7e7oba2bu4jsgzr4nvwhkw/lib/libmpi.so (found version "3.1") 
 -- Found MPI: TRUE (found version "3.1")  
 -- Found nvc: /leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-8.5.0/nvhpc-24.5-torlmnyzcexnrs6pq4cccabv7ehkv3xy/Linux_x86_64/24.5/compilers/bin/nvc – jacobi_gpu will target the A100 GPU
--- Configuring done (3.2s)
+-- Configuring done (3.3s)
 -- Generating done (0.1s)
 -- Build files have been written to: /leonardo/home/userexternal/aamaduz1/exam_HPC_master_HPQC/scripts/build
-[ 14%] Building C object CMakeFiles/jacobi.dir/jacobi.c.o
-[ 28%] Compiling jacobi_gpu with nvc -mp=gpu -gpu=cc80
-[ 42%] Building C object CMakeFiles/jacobi_just_omp.dir/jacobi_just_omp.c.o
-[ 57%] Building C object CMakeFiles/jacobi_omp_mpi.dir/jacobi_omp_mpi.c.o
-[ 71%] Linking C executable jacobi_omp_mpi
-[ 85%] Linking C executable jacobi_just_omp
-[ 85%] Built target jacobi_just_omp
-[ 85%] Built target jacobi_omp_mpi
+[ 11%] Building C object CMakeFiles/jacobi_just_omp.dir/jacobi_just_omp.c.o
+[ 33%] Building C object CMakeFiles/jacobi_omp_mpi.dir/jacobi_omp_mpi.c.o
+[ 33%] Building C object CMakeFiles/jacobi.dir/jacobi.c.o
+[ 55%] Building C object CMakeFiles/jacobi_mpi_omp.dir/jacobi_mpi_omp.c.o
+[ 55%] Compiling jacobi_gpu with nvc -mp=gpu -gpu=cc80
+[ 66%] Linking C executable jacobi_omp_mpi
+[ 77%] Linking C executable jacobi_just_omp
+[ 88%] Linking C executable jacobi_mpi_omp
+[ 88%] Built target jacobi_omp_mpi
+[ 88%] Built target jacobi_mpi_omp
+[ 88%] Built target jacobi_just_omp
 [100%] Linking C executable jacobi
 [100%] Built target jacobi
 [100%] Built target jacobi_gpu_build
 [cmake] Configuring in /leonardo/home/userexternal/aamaduz1/exam_HPC_master_HPQC/scripts/build ...
 [cmake] Building ...
 [cmake] Build complete.
+[info] Cleared previous CSV: /leonardo/home/userexternal/aamaduz1/exam_HPC_master_HPQC/scripts/timing_results_2.csv
 [run] none     nx=100 ...
 grid size 100 X 100 
 Iteration =0 ,Relative norm=1.000000e+00
@@ -141,7 +145,7 @@ Iteration =30000 ,Relative norm=1.231267e-04
 Iteration =31000 ,Relative norm=1.138304e-04
 Iteration =32000 ,Relative norm=1.052397e-04
 Terminated on 32652 iterations, Relative Norm=9.999253e-05 
-[run] none     nx=250 done in 1.9s
+[run] none     nx=250 done in 2.0s
 [run] none     nx=300 ...
 grid size 300 X 300 
 Iteration =0 ,Relative norm=1.000000e+00
@@ -187,7 +191,7 @@ Iteration =39000 ,Relative norm=1.175678e-04
 Iteration =40000 ,Relative norm=1.113080e-04
 Iteration =41000 ,Relative norm=1.053854e-04
 Terminated on 41960 iterations, Relative Norm=9.999929e-05 
-[run] none     nx=300 done in 4.1s
+[run] none     nx=300 done in 4.2s
 [run] none     nx=350 ...
 grid size 350 X 350 
 Iteration =0 ,Relative norm=1.000000e+00
@@ -243,7 +247,7 @@ Iteration =49000 ,Relative norm=1.098309e-04
 Iteration =50000 ,Relative norm=1.054869e-04
 Iteration =51000 ,Relative norm=1.013182e-04
 Terminated on 51325 iterations, Relative Norm=9.999977e-05 
-[run] none     nx=350 done in 8.4s
+[run] none     nx=350 done in 9.0s
 [run] none     nx=400 ...
 grid size 400 X 400 
 Iteration =0 ,Relative norm=1.000000e+00
@@ -308,7 +312,7 @@ Iteration =58000 ,Relative norm=1.081752e-04
 Iteration =59000 ,Relative norm=1.048637e-04
 Iteration =60000 ,Relative norm=1.016572e-04
 Terminated on 60530 iterations, Relative Norm=9.999898e-05 
-[run] none     nx=400 done in 13.0s
+[run] none     nx=400 done in 14.3s
 [run] just_omp nx=100 t=1 ...
 grid size 100 X 100  (OMP threads: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -320,8 +324,8 @@ Iteration =5000 ,Relative norm=4.507038e-04
 Iteration =6000 ,Relative norm=2.776774e-04
 Iteration =7000 ,Relative norm=1.711439e-04
 Iteration =8000 ,Relative norm=1.054927e-04
-Terminated on 8111 iterations, Relative Norm=9.997646e-05 
-[run] just_omp nx=100 t=1 done in 0.2s
+Terminated on 8120 iterations, Relative Norm=9.954204e-05 
+[run] just_omp nx=100 t=1 done in 0.1s
 [run] just_omp nx=100 t=2 ...
 grid size 100 X 100  (OMP threads: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -333,8 +337,8 @@ Iteration =5000 ,Relative norm=4.507038e-04
 Iteration =6000 ,Relative norm=2.776774e-04
 Iteration =7000 ,Relative norm=1.711439e-04
 Iteration =8000 ,Relative norm=1.054927e-04
-Terminated on 8111 iterations, Relative Norm=9.997646e-05 
-[run] just_omp nx=100 t=2 done in 0.2s
+Terminated on 8120 iterations, Relative Norm=9.954204e-05 
+[run] just_omp nx=100 t=2 done in 0.1s
 [run] just_omp nx=100 t=4 ...
 grid size 100 X 100  (OMP threads: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -346,8 +350,8 @@ Iteration =5000 ,Relative norm=4.507038e-04
 Iteration =6000 ,Relative norm=2.776774e-04
 Iteration =7000 ,Relative norm=1.711439e-04
 Iteration =8000 ,Relative norm=1.054927e-04
-Terminated on 8111 iterations, Relative Norm=9.997646e-05 
-[run] just_omp nx=100 t=4 done in 0.2s
+Terminated on 8120 iterations, Relative Norm=9.954204e-05 
+[run] just_omp nx=100 t=4 done in 0.1s
 [run] just_omp nx=100 t=8 ...
 grid size 100 X 100  (OMP threads: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -359,8 +363,8 @@ Iteration =5000 ,Relative norm=4.507038e-04
 Iteration =6000 ,Relative norm=2.776774e-04
 Iteration =7000 ,Relative norm=1.711439e-04
 Iteration =8000 ,Relative norm=1.054927e-04
-Terminated on 8111 iterations, Relative Norm=9.997646e-05 
-[run] just_omp nx=100 t=8 done in 0.3s
+Terminated on 8120 iterations, Relative Norm=9.954204e-05 
+[run] just_omp nx=100 t=8 done in 0.2s
 [run] just_omp nx=150 t=1 ...
 grid size 150 X 150  (OMP threads: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -380,7 +384,7 @@ Iteration =13000 ,Relative norm=1.659499e-04
 Iteration =14000 ,Relative norm=1.336391e-04
 Iteration =15000 ,Relative norm=1.076243e-04
 Terminated on 15340 iterations, Relative Norm=9.998737e-05 
-[run] just_omp nx=150 t=1 done in 0.9s
+[run] just_omp nx=150 t=1 done in 0.3s
 [run] just_omp nx=150 t=2 ...
 grid size 150 X 150  (OMP threads: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -400,7 +404,7 @@ Iteration =13000 ,Relative norm=1.659499e-04
 Iteration =14000 ,Relative norm=1.336391e-04
 Iteration =15000 ,Relative norm=1.076243e-04
 Terminated on 15340 iterations, Relative Norm=9.998737e-05 
-[run] just_omp nx=150 t=2 done in 0.6s
+[run] just_omp nx=150 t=2 done in 0.3s
 [run] just_omp nx=150 t=4 ...
 grid size 150 X 150  (OMP threads: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -420,7 +424,7 @@ Iteration =13000 ,Relative norm=1.659499e-04
 Iteration =14000 ,Relative norm=1.336391e-04
 Iteration =15000 ,Relative norm=1.076243e-04
 Terminated on 15340 iterations, Relative Norm=9.998737e-05 
-[run] just_omp nx=150 t=4 done in 0.6s
+[run] just_omp nx=150 t=4 done in 0.3s
 [run] just_omp nx=150 t=8 ...
 grid size 150 X 150  (OMP threads: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -440,7 +444,7 @@ Iteration =13000 ,Relative norm=1.659499e-04
 Iteration =14000 ,Relative norm=1.336391e-04
 Iteration =15000 ,Relative norm=1.076243e-04
 Terminated on 15340 iterations, Relative Norm=9.998737e-05 
-[run] just_omp nx=150 t=8 done in 1.0s
+[run] just_omp nx=150 t=8 done in 0.6s
 [run] just_omp nx=200 t=1 ...
 grid size 200 X 200  (OMP threads: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -467,8 +471,8 @@ Iteration =20000 ,Relative norm=1.565564e-04
 Iteration =21000 ,Relative norm=1.385281e-04
 Iteration =22000 ,Relative norm=1.225831e-04
 Iteration =23000 ,Relative norm=1.084778e-04
-Terminated on 23666 iterations, Relative Norm=9.999779e-05 
-[run] just_omp nx=200 t=1 done in 2.4s
+Terminated on 23670 iterations, Relative Norm=9.994892e-05 
+[run] just_omp nx=200 t=1 done in 0.8s
 [run] just_omp nx=200 t=2 ...
 grid size 200 X 200  (OMP threads: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -495,8 +499,8 @@ Iteration =20000 ,Relative norm=1.565564e-04
 Iteration =21000 ,Relative norm=1.385281e-04
 Iteration =22000 ,Relative norm=1.225831e-04
 Iteration =23000 ,Relative norm=1.084778e-04
-Terminated on 23666 iterations, Relative Norm=9.999779e-05 
-[run] just_omp nx=200 t=2 done in 1.6s
+Terminated on 23670 iterations, Relative Norm=9.994892e-05 
+[run] just_omp nx=200 t=2 done in 0.8s
 [run] just_omp nx=200 t=4 ...
 grid size 200 X 200  (OMP threads: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -523,8 +527,8 @@ Iteration =20000 ,Relative norm=1.565564e-04
 Iteration =21000 ,Relative norm=1.385281e-04
 Iteration =22000 ,Relative norm=1.225831e-04
 Iteration =23000 ,Relative norm=1.084778e-04
-Terminated on 23666 iterations, Relative Norm=9.999779e-05 
-[run] just_omp nx=200 t=4 done in 2.0s
+Terminated on 23670 iterations, Relative Norm=9.994892e-05 
+[run] just_omp nx=200 t=4 done in 0.8s
 [run] just_omp nx=200 t=8 ...
 grid size 200 X 200  (OMP threads: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -551,8 +555,8 @@ Iteration =20000 ,Relative norm=1.565564e-04
 Iteration =21000 ,Relative norm=1.385281e-04
 Iteration =22000 ,Relative norm=1.225831e-04
 Iteration =23000 ,Relative norm=1.084778e-04
-Terminated on 23666 iterations, Relative Norm=9.999779e-05 
-[run] just_omp nx=200 t=8 done in 2.2s
+Terminated on 23670 iterations, Relative Norm=9.994892e-05 
+[run] just_omp nx=200 t=8 done in 1.3s
 [run] just_omp nx=250 t=1 ...
 grid size 250 X 250  (OMP threads: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -588,8 +592,8 @@ Iteration =29000 ,Relative norm=1.331885e-04
 Iteration =30000 ,Relative norm=1.231267e-04
 Iteration =31000 ,Relative norm=1.138304e-04
 Iteration =32000 ,Relative norm=1.052397e-04
-Terminated on 32652 iterations, Relative Norm=9.999253e-05 
-[run] just_omp nx=250 t=1 done in 5.3s
+Terminated on 32660 iterations, Relative Norm=9.992980e-05 
+[run] just_omp nx=250 t=1 done in 1.8s
 [run] just_omp nx=250 t=2 ...
 grid size 250 X 250  (OMP threads: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -625,8 +629,8 @@ Iteration =29000 ,Relative norm=1.331885e-04
 Iteration =30000 ,Relative norm=1.231267e-04
 Iteration =31000 ,Relative norm=1.138304e-04
 Iteration =32000 ,Relative norm=1.052397e-04
-Terminated on 32652 iterations, Relative Norm=9.999253e-05 
-[run] just_omp nx=250 t=2 done in 4.4s
+Terminated on 32660 iterations, Relative Norm=9.992980e-05 
+[run] just_omp nx=250 t=2 done in 1.8s
 [run] just_omp nx=250 t=4 ...
 grid size 250 X 250  (OMP threads: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -662,8 +666,8 @@ Iteration =29000 ,Relative norm=1.331885e-04
 Iteration =30000 ,Relative norm=1.231267e-04
 Iteration =31000 ,Relative norm=1.138304e-04
 Iteration =32000 ,Relative norm=1.052397e-04
-Terminated on 32652 iterations, Relative Norm=9.999253e-05 
-[run] just_omp nx=250 t=4 done in 4.1s
+Terminated on 32660 iterations, Relative Norm=9.992980e-05 
+[run] just_omp nx=250 t=4 done in 2.6s
 [run] just_omp nx=250 t=8 ...
 grid size 250 X 250  (OMP threads: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -699,8 +703,8 @@ Iteration =29000 ,Relative norm=1.331885e-04
 Iteration =30000 ,Relative norm=1.231267e-04
 Iteration =31000 ,Relative norm=1.138304e-04
 Iteration =32000 ,Relative norm=1.052397e-04
-Terminated on 32652 iterations, Relative Norm=9.999253e-05 
-[run] just_omp nx=250 t=8 done in 5.1s
+Terminated on 32660 iterations, Relative Norm=9.992980e-05 
+[run] just_omp nx=250 t=8 done in 2.8s
 [run] just_omp nx=300 t=1 ...
 grid size 300 X 300  (OMP threads: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -746,7 +750,7 @@ Iteration =39000 ,Relative norm=1.175678e-04
 Iteration =40000 ,Relative norm=1.113080e-04
 Iteration =41000 ,Relative norm=1.053854e-04
 Terminated on 41960 iterations, Relative Norm=9.999929e-05 
-[run] just_omp nx=300 t=1 done in 10.1s
+[run] just_omp nx=300 t=1 done in 3.8s
 [run] just_omp nx=300 t=2 ...
 grid size 300 X 300  (OMP threads: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -792,7 +796,7 @@ Iteration =39000 ,Relative norm=1.175678e-04
 Iteration =40000 ,Relative norm=1.113080e-04
 Iteration =41000 ,Relative norm=1.053854e-04
 Terminated on 41960 iterations, Relative Norm=9.999929e-05 
-[run] just_omp nx=300 t=2 done in 6.3s
+[run] just_omp nx=300 t=2 done in 3.3s
 [run] just_omp nx=300 t=4 ...
 grid size 300 X 300  (OMP threads: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -838,7 +842,7 @@ Iteration =39000 ,Relative norm=1.175678e-04
 Iteration =40000 ,Relative norm=1.113080e-04
 Iteration =41000 ,Relative norm=1.053854e-04
 Terminated on 41960 iterations, Relative Norm=9.999929e-05 
-[run] just_omp nx=300 t=4 done in 6.5s
+[run] just_omp nx=300 t=4 done in 6.4s
 [run] just_omp nx=300 t=8 ...
 grid size 300 X 300  (OMP threads: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -884,7 +888,7 @@ Iteration =39000 ,Relative norm=1.175678e-04
 Iteration =40000 ,Relative norm=1.113080e-04
 Iteration =41000 ,Relative norm=1.053854e-04
 Terminated on 41960 iterations, Relative Norm=9.999929e-05 
-[run] just_omp nx=300 t=8 done in 6.0s
+[run] just_omp nx=300 t=8 done in 7.3s
 [run] just_omp nx=350 t=1 ...
 grid size 350 X 350  (OMP threads: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -939,8 +943,8 @@ Iteration =48000 ,Relative norm=1.143581e-04
 Iteration =49000 ,Relative norm=1.098309e-04
 Iteration =50000 ,Relative norm=1.054869e-04
 Iteration =51000 ,Relative norm=1.013182e-04
-Terminated on 51325 iterations, Relative Norm=9.999977e-05 
-[run] just_omp nx=350 t=1 done in 18.2s
+Terminated on 51330 iterations, Relative Norm=9.997962e-05 
+[run] just_omp nx=350 t=1 done in 7.5s
 [run] just_omp nx=350 t=2 ...
 grid size 350 X 350  (OMP threads: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -995,8 +999,8 @@ Iteration =48000 ,Relative norm=1.143581e-04
 Iteration =49000 ,Relative norm=1.098309e-04
 Iteration =50000 ,Relative norm=1.054869e-04
 Iteration =51000 ,Relative norm=1.013182e-04
-Terminated on 51325 iterations, Relative Norm=9.999977e-05 
-[run] just_omp nx=350 t=2 done in 10.7s
+Terminated on 51330 iterations, Relative Norm=9.997962e-05 
+[run] just_omp nx=350 t=2 done in 5.6s
 [run] just_omp nx=350 t=4 ...
 grid size 350 X 350  (OMP threads: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1051,8 +1055,8 @@ Iteration =48000 ,Relative norm=1.143581e-04
 Iteration =49000 ,Relative norm=1.098309e-04
 Iteration =50000 ,Relative norm=1.054869e-04
 Iteration =51000 ,Relative norm=1.013182e-04
-Terminated on 51325 iterations, Relative Norm=9.999977e-05 
-[run] just_omp nx=350 t=4 done in 11.1s
+Terminated on 51330 iterations, Relative Norm=9.997962e-05 
+[run] just_omp nx=350 t=4 done in 5.6s
 [run] just_omp nx=350 t=8 ...
 grid size 350 X 350  (OMP threads: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1107,8 +1111,8 @@ Iteration =48000 ,Relative norm=1.143581e-04
 Iteration =49000 ,Relative norm=1.098309e-04
 Iteration =50000 ,Relative norm=1.054869e-04
 Iteration =51000 ,Relative norm=1.013182e-04
-Terminated on 51325 iterations, Relative Norm=9.999977e-05 
-[run] just_omp nx=350 t=8 done in 12.6s
+Terminated on 51330 iterations, Relative Norm=9.997962e-05 
+[run] just_omp nx=350 t=8 done in 8.3s
 [run] just_omp nx=400 t=1 ...
 grid size 400 X 400  (OMP threads: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1173,7 +1177,7 @@ Iteration =58000 ,Relative norm=1.081752e-04
 Iteration =59000 ,Relative norm=1.048637e-04
 Iteration =60000 ,Relative norm=1.016572e-04
 Terminated on 60530 iterations, Relative Norm=9.999898e-05 
-[run] just_omp nx=400 t=1 done in 28.0s
+[run] just_omp nx=400 t=1 done in 12.2s
 [run] just_omp nx=400 t=2 ...
 grid size 400 X 400  (OMP threads: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1238,7 +1242,7 @@ Iteration =58000 ,Relative norm=1.081752e-04
 Iteration =59000 ,Relative norm=1.048637e-04
 Iteration =60000 ,Relative norm=1.016572e-04
 Terminated on 60530 iterations, Relative Norm=9.999898e-05 
-[run] just_omp nx=400 t=2 done in 16.6s
+[run] just_omp nx=400 t=2 done in 15.2s
 [run] just_omp nx=400 t=4 ...
 grid size 400 X 400  (OMP threads: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1303,7 +1307,7 @@ Iteration =58000 ,Relative norm=1.081752e-04
 Iteration =59000 ,Relative norm=1.048637e-04
 Iteration =60000 ,Relative norm=1.016572e-04
 Terminated on 60530 iterations, Relative Norm=9.999898e-05 
-[run] just_omp nx=400 t=4 done in 17.7s
+[run] just_omp nx=400 t=4 done in 16.7s
 [run] just_omp nx=400 t=8 ...
 grid size 400 X 400  (OMP threads: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1368,7 +1372,7 @@ Iteration =58000 ,Relative norm=1.081752e-04
 Iteration =59000 ,Relative norm=1.048637e-04
 Iteration =60000 ,Relative norm=1.016572e-04
 Terminated on 60530 iterations, Relative Norm=9.999898e-05 
-[run] just_omp nx=400 t=8 done in 22.8s
+[run] just_omp nx=400 t=8 done in 14.4s
 [run] omp_mpi  nx=100 p=1 t=1 ...
 grid size 100 X 100  (MPI ranks: 1, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1381,8 +1385,8 @@ Iteration =6000 ,Relative norm=4.301332e-04
 Iteration =7000 ,Relative norm=2.651406e-04
 Iteration =8000 ,Relative norm=1.634366e-04
 Iteration =9000 ,Relative norm=1.007448e-04
-Terminated on 9016 iterations, Relative Norm=9.996792e-05 
-[run] omp_mpi  nx=100 p=1 t=1 done in 1.1s
+Terminated on 9020 iterations, Relative Norm=9.977463e-05 
+[run] omp_mpi  nx=100 p=1 t=1 done in 0.9s
 [run] omp_mpi  nx=100 p=1 t=2 ...
 grid size 100 X 100  (MPI ranks: 1, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1395,8 +1399,8 @@ Iteration =6000 ,Relative norm=4.301332e-04
 Iteration =7000 ,Relative norm=2.651406e-04
 Iteration =8000 ,Relative norm=1.634366e-04
 Iteration =9000 ,Relative norm=1.007448e-04
-Terminated on 9016 iterations, Relative Norm=9.996792e-05 
-[run] omp_mpi  nx=100 p=1 t=2 done in 0.9s
+Terminated on 9020 iterations, Relative Norm=9.977463e-05 
+[run] omp_mpi  nx=100 p=1 t=2 done in 0.7s
 [run] omp_mpi  nx=100 p=1 t=4 ...
 grid size 100 X 100  (MPI ranks: 1, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1409,8 +1413,8 @@ Iteration =6000 ,Relative norm=4.301332e-04
 Iteration =7000 ,Relative norm=2.651406e-04
 Iteration =8000 ,Relative norm=1.634366e-04
 Iteration =9000 ,Relative norm=1.007448e-04
-Terminated on 9016 iterations, Relative Norm=9.996792e-05 
-[run] omp_mpi  nx=100 p=1 t=4 done in 1.1s
+Terminated on 9020 iterations, Relative Norm=9.977463e-05 
+[run] omp_mpi  nx=100 p=1 t=4 done in 0.9s
 [run] omp_mpi  nx=100 p=1 t=8 ...
 grid size 100 X 100  (MPI ranks: 1, OMP threads/rank: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1423,8 +1427,8 @@ Iteration =6000 ,Relative norm=4.301332e-04
 Iteration =7000 ,Relative norm=2.651406e-04
 Iteration =8000 ,Relative norm=1.634366e-04
 Iteration =9000 ,Relative norm=1.007448e-04
-Terminated on 9016 iterations, Relative Norm=9.996792e-05 
-[run] omp_mpi  nx=100 p=1 t=8 done in 2.1s
+Terminated on 9020 iterations, Relative Norm=9.977463e-05 
+[run] omp_mpi  nx=100 p=1 t=8 done in 1.8s
 [run] omp_mpi  nx=100 p=2 t=1 ...
 grid size 100 X 100  (MPI ranks: 2, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1436,8 +1440,8 @@ Iteration =5000 ,Relative norm=6.917265e-04
 Iteration =6000 ,Relative norm=4.263900e-04
 Iteration =7000 ,Relative norm=2.628331e-04
 Iteration =8000 ,Relative norm=1.620143e-04
-Terminated on 8998 iterations, Relative Norm=9.996474e-05 
-[run] omp_mpi  nx=100 p=2 t=1 done in 1.2s
+Terminated on 9000 iterations, Relative Norm=9.986805e-05 
+[run] omp_mpi  nx=100 p=2 t=1 done in 1.1s
 [run] omp_mpi  nx=100 p=2 t=2 ...
 grid size 100 X 100  (MPI ranks: 2, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1449,8 +1453,8 @@ Iteration =5000 ,Relative norm=6.917265e-04
 Iteration =6000 ,Relative norm=4.263900e-04
 Iteration =7000 ,Relative norm=2.628331e-04
 Iteration =8000 ,Relative norm=1.620143e-04
-Terminated on 8998 iterations, Relative Norm=9.996474e-05 
-[run] omp_mpi  nx=100 p=2 t=2 done in 1.2s
+Terminated on 9000 iterations, Relative Norm=9.986805e-05 
+[run] omp_mpi  nx=100 p=2 t=2 done in 1.1s
 [run] omp_mpi  nx=100 p=2 t=4 ...
 grid size 100 X 100  (MPI ranks: 2, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1462,7 +1466,7 @@ Iteration =5000 ,Relative norm=6.917265e-04
 Iteration =6000 ,Relative norm=4.263900e-04
 Iteration =7000 ,Relative norm=2.628331e-04
 Iteration =8000 ,Relative norm=1.620143e-04
-Terminated on 8998 iterations, Relative Norm=9.996474e-05 
+Terminated on 9000 iterations, Relative Norm=9.986805e-05 
 [run] omp_mpi  nx=100 p=2 t=4 done in 1.3s
 [run] omp_mpi  nx=100 p=4 t=1 ...
 grid size 100 X 100  (MPI ranks: 4, OMP threads/rank: 1)
@@ -1475,8 +1479,8 @@ Iteration =5000 ,Relative norm=6.855049e-04
 Iteration =6000 ,Relative norm=4.225555e-04
 Iteration =7000 ,Relative norm=2.604696e-04
 Iteration =8000 ,Relative norm=1.605574e-04
-Terminated on 8979 iterations, Relative Norm=9.998070e-05 
-[run] omp_mpi  nx=100 p=4 t=1 done in 1.1s
+Terminated on 8980 iterations, Relative Norm=9.993234e-05 
+[run] omp_mpi  nx=100 p=4 t=1 done in 1.0s
 [run] omp_mpi  nx=100 p=4 t=2 ...
 grid size 100 X 100  (MPI ranks: 4, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1488,8 +1492,8 @@ Iteration =5000 ,Relative norm=6.855049e-04
 Iteration =6000 ,Relative norm=4.225555e-04
 Iteration =7000 ,Relative norm=2.604696e-04
 Iteration =8000 ,Relative norm=1.605574e-04
-Terminated on 8979 iterations, Relative Norm=9.998070e-05 
-[run] omp_mpi  nx=100 p=4 t=2 done in 1.4s
+Terminated on 8980 iterations, Relative Norm=9.993234e-05 
+[run] omp_mpi  nx=100 p=4 t=2 done in 1.3s
 [run] omp_mpi  nx=100 p=8 t=1 ...
 grid size 100 X 100  (MPI ranks: 8, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1501,7 +1505,7 @@ Iteration =5000 ,Relative norm=6.729895e-04
 Iteration =6000 ,Relative norm=4.148409e-04
 Iteration =7000 ,Relative norm=2.557142e-04
 Iteration =8000 ,Relative norm=1.576261e-04
-Terminated on 8941 iterations, Relative Norm=9.997668e-05 
+Terminated on 8950 iterations, Relative Norm=9.954228e-05 
 [run] omp_mpi  nx=100 p=8 t=1 done in 1.5s
 [run] omp_mpi  nx=150 p=1 t=1 ...
 grid size 150 X 150  (MPI ranks: 1, OMP threads/rank: 1)
@@ -1523,8 +1527,8 @@ Iteration =14000 ,Relative norm=2.075550e-04
 Iteration =15000 ,Relative norm=1.671600e-04
 Iteration =16000 ,Relative norm=1.346268e-04
 Iteration =17000 ,Relative norm=1.084253e-04
-Terminated on 17374 iterations, Relative Norm=9.999414e-05 
-[run] omp_mpi  nx=150 p=1 t=1 done in 1.8s
+Terminated on 17380 iterations, Relative Norm=9.986436e-05 
+[run] omp_mpi  nx=150 p=1 t=1 done in 0.9s
 [run] omp_mpi  nx=150 p=1 t=2 ...
 grid size 150 X 150  (MPI ranks: 1, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1545,8 +1549,8 @@ Iteration =14000 ,Relative norm=2.075550e-04
 Iteration =15000 ,Relative norm=1.671600e-04
 Iteration =16000 ,Relative norm=1.346268e-04
 Iteration =17000 ,Relative norm=1.084253e-04
-Terminated on 17374 iterations, Relative Norm=9.999414e-05 
-[run] omp_mpi  nx=150 p=1 t=2 done in 1.9s
+Terminated on 17380 iterations, Relative Norm=9.986436e-05 
+[run] omp_mpi  nx=150 p=1 t=2 done in 1.0s
 [run] omp_mpi  nx=150 p=1 t=4 ...
 grid size 150 X 150  (MPI ranks: 1, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1567,8 +1571,8 @@ Iteration =14000 ,Relative norm=2.075550e-04
 Iteration =15000 ,Relative norm=1.671600e-04
 Iteration =16000 ,Relative norm=1.346268e-04
 Iteration =17000 ,Relative norm=1.084253e-04
-Terminated on 17374 iterations, Relative Norm=9.999414e-05 
-[run] omp_mpi  nx=150 p=1 t=4 done in 2.4s
+Terminated on 17380 iterations, Relative Norm=9.986436e-05 
+[run] omp_mpi  nx=150 p=1 t=4 done in 1.3s
 [run] omp_mpi  nx=150 p=1 t=8 ...
 grid size 150 X 150  (MPI ranks: 1, OMP threads/rank: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1589,8 +1593,8 @@ Iteration =14000 ,Relative norm=2.075550e-04
 Iteration =15000 ,Relative norm=1.671600e-04
 Iteration =16000 ,Relative norm=1.346268e-04
 Iteration =17000 ,Relative norm=1.084253e-04
-Terminated on 17374 iterations, Relative Norm=9.999414e-05 
-[run] omp_mpi  nx=150 p=1 t=8 done in 4.3s
+Terminated on 17380 iterations, Relative Norm=9.986436e-05 
+[run] omp_mpi  nx=150 p=1 t=8 done in 2.8s
 [run] omp_mpi  nx=150 p=2 t=1 ...
 grid size 150 X 150  (MPI ranks: 2, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1611,8 +1615,8 @@ Iteration =14000 ,Relative norm=2.063487e-04
 Iteration =15000 ,Relative norm=1.661885e-04
 Iteration =16000 ,Relative norm=1.338444e-04
 Iteration =17000 ,Relative norm=1.077952e-04
-Terminated on 17347 iterations, Relative Norm=9.999564e-05 
-[run] omp_mpi  nx=150 p=2 t=1 done in 1.6s
+Terminated on 17350 iterations, Relative Norm=9.993073e-05 
+[run] omp_mpi  nx=150 p=2 t=1 done in 1.2s
 [run] omp_mpi  nx=150 p=2 t=2 ...
 grid size 150 X 150  (MPI ranks: 2, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1633,8 +1637,8 @@ Iteration =14000 ,Relative norm=2.063487e-04
 Iteration =15000 ,Relative norm=1.661885e-04
 Iteration =16000 ,Relative norm=1.338444e-04
 Iteration =17000 ,Relative norm=1.077952e-04
-Terminated on 17347 iterations, Relative Norm=9.999564e-05 
-[run] omp_mpi  nx=150 p=2 t=2 done in 1.8s
+Terminated on 17350 iterations, Relative Norm=9.993073e-05 
+[run] omp_mpi  nx=150 p=2 t=2 done in 1.2s
 [run] omp_mpi  nx=150 p=2 t=4 ...
 grid size 150 X 150  (MPI ranks: 2, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1655,8 +1659,8 @@ Iteration =14000 ,Relative norm=2.063487e-04
 Iteration =15000 ,Relative norm=1.661885e-04
 Iteration =16000 ,Relative norm=1.338444e-04
 Iteration =17000 ,Relative norm=1.077952e-04
-Terminated on 17347 iterations, Relative Norm=9.999564e-05 
-[run] omp_mpi  nx=150 p=2 t=4 done in 2.2s
+Terminated on 17350 iterations, Relative Norm=9.993073e-05 
+[run] omp_mpi  nx=150 p=2 t=4 done in 1.7s
 [run] omp_mpi  nx=150 p=4 t=1 ...
 grid size 150 X 150  (MPI ranks: 4, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1678,7 +1682,7 @@ Iteration =15000 ,Relative norm=1.652016e-04
 Iteration =16000 ,Relative norm=1.330496e-04
 Iteration =17000 ,Relative norm=1.071550e-04
 Terminated on 17320 iterations, Relative Norm=9.998443e-05 
-[run] omp_mpi  nx=150 p=4 t=1 done in 1.7s
+[run] omp_mpi  nx=150 p=4 t=1 done in 1.3s
 [run] omp_mpi  nx=150 p=4 t=2 ...
 grid size 150 X 150  (MPI ranks: 4, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1700,7 +1704,7 @@ Iteration =15000 ,Relative norm=1.652016e-04
 Iteration =16000 ,Relative norm=1.330496e-04
 Iteration =17000 ,Relative norm=1.071550e-04
 Terminated on 17320 iterations, Relative Norm=9.998443e-05 
-[run] omp_mpi  nx=150 p=4 t=2 done in 2.3s
+[run] omp_mpi  nx=150 p=4 t=2 done in 1.6s
 [run] omp_mpi  nx=150 p=8 t=1 ...
 grid size 150 X 150  (MPI ranks: 8, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1721,8 +1725,8 @@ Iteration =14000 ,Relative norm=2.027011e-04
 Iteration =15000 ,Relative norm=1.632508e-04
 Iteration =16000 ,Relative norm=1.314784e-04
 Iteration =17000 ,Relative norm=1.058897e-04
-Terminated on 17265 iterations, Relative Norm=9.998698e-05 
-[run] omp_mpi  nx=150 p=8 t=1 done in 1.7s
+Terminated on 17270 iterations, Relative Norm=9.987883e-05 
+[run] omp_mpi  nx=150 p=8 t=1 done in 1.4s
 [run] omp_mpi  nx=200 p=1 t=1 ...
 grid size 200 X 200  (MPI ranks: 1, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1753,8 +1757,8 @@ Iteration =24000 ,Relative norm=1.492824e-04
 Iteration =25000 ,Relative norm=1.321172e-04
 Iteration =26000 ,Relative norm=1.169257e-04
 Iteration =27000 ,Relative norm=1.034810e-04
-Terminated on 27281 iterations, Relative Norm=9.998938e-05 
-[run] omp_mpi  nx=200 p=1 t=1 done in 3.9s
+Terminated on 27290 iterations, Relative Norm=9.987951e-05 
+[run] omp_mpi  nx=200 p=1 t=1 done in 1.5s
 [run] omp_mpi  nx=200 p=1 t=2 ...
 grid size 200 X 200  (MPI ranks: 1, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1785,8 +1789,8 @@ Iteration =24000 ,Relative norm=1.492824e-04
 Iteration =25000 ,Relative norm=1.321172e-04
 Iteration =26000 ,Relative norm=1.169257e-04
 Iteration =27000 ,Relative norm=1.034810e-04
-Terminated on 27281 iterations, Relative Norm=9.998938e-05 
-[run] omp_mpi  nx=200 p=1 t=2 done in 4.2s
+Terminated on 27290 iterations, Relative Norm=9.987951e-05 
+[run] omp_mpi  nx=200 p=1 t=2 done in 1.5s
 [run] omp_mpi  nx=200 p=1 t=4 ...
 grid size 200 X 200  (MPI ranks: 1, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1817,8 +1821,8 @@ Iteration =24000 ,Relative norm=1.492824e-04
 Iteration =25000 ,Relative norm=1.321172e-04
 Iteration =26000 ,Relative norm=1.169257e-04
 Iteration =27000 ,Relative norm=1.034810e-04
-Terminated on 27281 iterations, Relative Norm=9.998938e-05 
-[run] omp_mpi  nx=200 p=1 t=4 done in 5.1s
+Terminated on 27290 iterations, Relative Norm=9.987951e-05 
+[run] omp_mpi  nx=200 p=1 t=4 done in 2.1s
 [run] omp_mpi  nx=200 p=1 t=8 ...
 grid size 200 X 200  (MPI ranks: 1, OMP threads/rank: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1849,8 +1853,8 @@ Iteration =24000 ,Relative norm=1.492824e-04
 Iteration =25000 ,Relative norm=1.321172e-04
 Iteration =26000 ,Relative norm=1.169257e-04
 Iteration =27000 ,Relative norm=1.034810e-04
-Terminated on 27281 iterations, Relative Norm=9.998938e-05 
-[run] omp_mpi  nx=200 p=1 t=8 done in 8.1s
+Terminated on 27290 iterations, Relative Norm=9.987951e-05 
+[run] omp_mpi  nx=200 p=1 t=8 done in 4.7s
 [run] omp_mpi  nx=200 p=2 t=1 ...
 grid size 200 X 200  (MPI ranks: 2, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1881,8 +1885,8 @@ Iteration =24000 ,Relative norm=1.486311e-04
 Iteration =25000 ,Relative norm=1.315408e-04
 Iteration =26000 ,Relative norm=1.164156e-04
 Iteration =27000 ,Relative norm=1.030295e-04
-Terminated on 27245 iterations, Relative Norm=9.999187e-05 
-[run] omp_mpi  nx=200 p=2 t=1 done in 2.7s
+Terminated on 27250 iterations, Relative Norm=9.993082e-05 
+[run] omp_mpi  nx=200 p=2 t=1 done in 1.9s
 [run] omp_mpi  nx=200 p=2 t=2 ...
 grid size 200 X 200  (MPI ranks: 2, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1913,8 +1917,8 @@ Iteration =24000 ,Relative norm=1.486311e-04
 Iteration =25000 ,Relative norm=1.315408e-04
 Iteration =26000 ,Relative norm=1.164156e-04
 Iteration =27000 ,Relative norm=1.030295e-04
-Terminated on 27245 iterations, Relative Norm=9.999187e-05 
-[run] omp_mpi  nx=200 p=2 t=2 done in 2.6s
+Terminated on 27250 iterations, Relative Norm=9.993082e-05 
+[run] omp_mpi  nx=200 p=2 t=2 done in 1.9s
 [run] omp_mpi  nx=200 p=2 t=4 ...
 grid size 200 X 200  (MPI ranks: 2, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1945,8 +1949,8 @@ Iteration =24000 ,Relative norm=1.486311e-04
 Iteration =25000 ,Relative norm=1.315408e-04
 Iteration =26000 ,Relative norm=1.164156e-04
 Iteration =27000 ,Relative norm=1.030295e-04
-Terminated on 27245 iterations, Relative Norm=9.999187e-05 
-[run] omp_mpi  nx=200 p=2 t=4 done in 4.1s
+Terminated on 27250 iterations, Relative Norm=9.993082e-05 
+[run] omp_mpi  nx=200 p=2 t=4 done in 3.2s
 [run] omp_mpi  nx=200 p=4 t=1 ...
 grid size 200 X 200  (MPI ranks: 4, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -1977,8 +1981,8 @@ Iteration =24000 ,Relative norm=1.479718e-04
 Iteration =25000 ,Relative norm=1.309573e-04
 Iteration =26000 ,Relative norm=1.158992e-04
 Iteration =27000 ,Relative norm=1.025726e-04
-Terminated on 27208 iterations, Relative Norm=9.999929e-05 
-[run] omp_mpi  nx=200 p=4 t=1 done in 2.9s
+Terminated on 27210 iterations, Relative Norm=9.997487e-05 
+[run] omp_mpi  nx=200 p=4 t=1 done in 1.5s
 [run] omp_mpi  nx=200 p=4 t=2 ...
 grid size 200 X 200  (MPI ranks: 4, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2009,8 +2013,8 @@ Iteration =24000 ,Relative norm=1.479718e-04
 Iteration =25000 ,Relative norm=1.309573e-04
 Iteration =26000 ,Relative norm=1.158992e-04
 Iteration =27000 ,Relative norm=1.025726e-04
-Terminated on 27208 iterations, Relative Norm=9.999929e-05 
-[run] omp_mpi  nx=200 p=4 t=2 done in 4.6s
+Terminated on 27210 iterations, Relative Norm=9.997487e-05 
+[run] omp_mpi  nx=200 p=4 t=2 done in 2.4s
 [run] omp_mpi  nx=200 p=8 t=1 ...
 grid size 200 X 200  (MPI ranks: 8, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2041,8 +2045,8 @@ Iteration =24000 ,Relative norm=1.466474e-04
 Iteration =25000 ,Relative norm=1.297852e-04
 Iteration =26000 ,Relative norm=1.148619e-04
 Iteration =27000 ,Relative norm=1.016545e-04
-Terminated on 27135 iterations, Relative Norm=9.999193e-05 
-[run] omp_mpi  nx=200 p=8 t=1 done in 2.3s
+Terminated on 27140 iterations, Relative Norm=9.993088e-05 
+[run] omp_mpi  nx=200 p=8 t=1 done in 2.1s
 [run] omp_mpi  nx=250 p=1 t=1 ...
 grid size 250 X 250  (MPI ranks: 1, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2084,8 +2088,8 @@ Iteration =35000 ,Relative norm=1.294326e-04
 Iteration =36000 ,Relative norm=1.196810e-04
 Iteration =37000 ,Relative norm=1.106640e-04
 Iteration =38000 ,Relative norm=1.023264e-04
-Terminated on 38294 iterations, Relative Norm=9.999681e-05 
-[run] omp_mpi  nx=250 p=1 t=1 done in 7.9s
+Terminated on 38300 iterations, Relative Norm=9.994983e-05 
+[run] omp_mpi  nx=250 p=1 t=1 done in 2.9s
 [run] omp_mpi  nx=250 p=1 t=2 ...
 grid size 250 X 250  (MPI ranks: 1, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2127,8 +2131,8 @@ Iteration =35000 ,Relative norm=1.294326e-04
 Iteration =36000 ,Relative norm=1.196810e-04
 Iteration =37000 ,Relative norm=1.106640e-04
 Iteration =38000 ,Relative norm=1.023264e-04
-Terminated on 38294 iterations, Relative Norm=9.999681e-05 
-[run] omp_mpi  nx=250 p=1 t=2 done in 8.5s
+Terminated on 38300 iterations, Relative Norm=9.994983e-05 
+[run] omp_mpi  nx=250 p=1 t=2 done in 2.8s
 [run] omp_mpi  nx=250 p=1 t=4 ...
 grid size 250 X 250  (MPI ranks: 1, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2170,8 +2174,8 @@ Iteration =35000 ,Relative norm=1.294326e-04
 Iteration =36000 ,Relative norm=1.196810e-04
 Iteration =37000 ,Relative norm=1.106640e-04
 Iteration =38000 ,Relative norm=1.023264e-04
-Terminated on 38294 iterations, Relative Norm=9.999681e-05 
-[run] omp_mpi  nx=250 p=1 t=4 done in 9.9s
+Terminated on 38300 iterations, Relative Norm=9.994983e-05 
+[run] omp_mpi  nx=250 p=1 t=4 done in 4.0s
 [run] omp_mpi  nx=250 p=1 t=8 ...
 grid size 250 X 250  (MPI ranks: 1, OMP threads/rank: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2213,8 +2217,8 @@ Iteration =35000 ,Relative norm=1.294326e-04
 Iteration =36000 ,Relative norm=1.196810e-04
 Iteration =37000 ,Relative norm=1.106640e-04
 Iteration =38000 ,Relative norm=1.023264e-04
-Terminated on 38294 iterations, Relative Norm=9.999681e-05 
-[run] omp_mpi  nx=250 p=1 t=8 done in 14.6s
+Terminated on 38300 iterations, Relative Norm=9.994983e-05 
+[run] omp_mpi  nx=250 p=1 t=8 done in 7.4s
 [run] omp_mpi  nx=250 p=2 t=1 ...
 grid size 250 X 250  (MPI ranks: 2, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2256,8 +2260,8 @@ Iteration =35000 ,Relative norm=1.289807e-04
 Iteration =36000 ,Relative norm=1.192630e-04
 Iteration =37000 ,Relative norm=1.102775e-04
 Iteration =38000 ,Relative norm=1.019691e-04
-Terminated on 38249 iterations, Relative Norm=9.999947e-05 
-[run] omp_mpi  nx=250 p=2 t=1 done in 4.8s
+Terminated on 38250 iterations, Relative Norm=9.999164e-05 
+[run] omp_mpi  nx=250 p=2 t=1 done in 2.1s
 [run] omp_mpi  nx=250 p=2 t=2 ...
 grid size 250 X 250  (MPI ranks: 2, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2299,8 +2303,8 @@ Iteration =35000 ,Relative norm=1.289807e-04
 Iteration =36000 ,Relative norm=1.192630e-04
 Iteration =37000 ,Relative norm=1.102775e-04
 Iteration =38000 ,Relative norm=1.019691e-04
-Terminated on 38249 iterations, Relative Norm=9.999947e-05 
-[run] omp_mpi  nx=250 p=2 t=2 done in 5.1s
+Terminated on 38250 iterations, Relative Norm=9.999164e-05 
+[run] omp_mpi  nx=250 p=2 t=2 done in 2.3s
 [run] omp_mpi  nx=250 p=2 t=4 ...
 grid size 250 X 250  (MPI ranks: 2, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2342,8 +2346,8 @@ Iteration =35000 ,Relative norm=1.289807e-04
 Iteration =36000 ,Relative norm=1.192630e-04
 Iteration =37000 ,Relative norm=1.102775e-04
 Iteration =38000 ,Relative norm=1.019691e-04
-Terminated on 38249 iterations, Relative Norm=9.999947e-05 
-[run] omp_mpi  nx=250 p=2 t=4 done in 5.4s
+Terminated on 38250 iterations, Relative Norm=9.999164e-05 
+[run] omp_mpi  nx=250 p=2 t=4 done in 3.8s
 [run] omp_mpi  nx=250 p=4 t=1 ...
 grid size 250 X 250  (MPI ranks: 4, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2385,8 +2389,8 @@ Iteration =35000 ,Relative norm=1.285243e-04
 Iteration =36000 ,Relative norm=1.188410e-04
 Iteration =37000 ,Relative norm=1.098874e-04
 Iteration =38000 ,Relative norm=1.016083e-04
-Terminated on 38204 iterations, Relative Norm=9.999751e-05 
-[run] omp_mpi  nx=250 p=4 t=1 done in 5.0s
+Terminated on 38210 iterations, Relative Norm=9.995053e-05 
+[run] omp_mpi  nx=250 p=4 t=1 done in 2.1s
 [run] omp_mpi  nx=250 p=4 t=2 ...
 grid size 250 X 250  (MPI ranks: 4, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2428,8 +2432,8 @@ Iteration =35000 ,Relative norm=1.285243e-04
 Iteration =36000 ,Relative norm=1.188410e-04
 Iteration =37000 ,Relative norm=1.098874e-04
 Iteration =38000 ,Relative norm=1.016083e-04
-Terminated on 38204 iterations, Relative Norm=9.999751e-05 
-[run] omp_mpi  nx=250 p=4 t=2 done in 6.5s
+Terminated on 38210 iterations, Relative Norm=9.995053e-05 
+[run] omp_mpi  nx=250 p=4 t=2 done in 2.9s
 [run] omp_mpi  nx=250 p=8 t=1 ...
 grid size 250 X 250  (MPI ranks: 8, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2471,8 +2475,8 @@ Iteration =35000 ,Relative norm=1.275985e-04
 Iteration =36000 ,Relative norm=1.179850e-04
 Iteration =37000 ,Relative norm=1.090958e-04
 Iteration =38000 ,Relative norm=1.008764e-04
-Terminated on 38112 iterations, Relative Norm=9.999523e-05 
-[run] omp_mpi  nx=250 p=8 t=1 done in 3.4s
+Terminated on 38120 iterations, Relative Norm=9.993259e-05 
+[run] omp_mpi  nx=250 p=8 t=1 done in 2.0s
 [run] omp_mpi  nx=300 p=1 t=1 ...
 grid size 300 X 300  (MPI ranks: 1, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2526,8 +2530,8 @@ Iteration =47000 ,Relative norm=1.182246e-04
 Iteration =48000 ,Relative norm=1.119573e-04
 Iteration =49000 ,Relative norm=1.060223e-04
 Iteration =50000 ,Relative norm=1.004019e-04
-Terminated on 50074 iterations, Relative Norm=9.999801e-05 
-[run] omp_mpi  nx=300 p=1 t=1 done in 15.2s
+Terminated on 50080 iterations, Relative Norm=9.996533e-05 
+[run] omp_mpi  nx=300 p=1 t=1 done in 5.5s
 [run] omp_mpi  nx=300 p=1 t=2 ...
 grid size 300 X 300  (MPI ranks: 1, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2581,8 +2585,8 @@ Iteration =47000 ,Relative norm=1.182246e-04
 Iteration =48000 ,Relative norm=1.119573e-04
 Iteration =49000 ,Relative norm=1.060223e-04
 Iteration =50000 ,Relative norm=1.004019e-04
-Terminated on 50074 iterations, Relative Norm=9.999801e-05 
-[run] omp_mpi  nx=300 p=1 t=2 done in 15.7s
+Terminated on 50080 iterations, Relative Norm=9.996533e-05 
+[run] omp_mpi  nx=300 p=1 t=2 done in 5.0s
 [run] omp_mpi  nx=300 p=1 t=4 ...
 grid size 300 X 300  (MPI ranks: 1, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2636,8 +2640,8 @@ Iteration =47000 ,Relative norm=1.182246e-04
 Iteration =48000 ,Relative norm=1.119573e-04
 Iteration =49000 ,Relative norm=1.060223e-04
 Iteration =50000 ,Relative norm=1.004019e-04
-Terminated on 50074 iterations, Relative Norm=9.999801e-05 
-[run] omp_mpi  nx=300 p=1 t=4 done in 18.6s
+Terminated on 50080 iterations, Relative Norm=9.996533e-05 
+[run] omp_mpi  nx=300 p=1 t=4 done in 7.4s
 [run] omp_mpi  nx=300 p=1 t=8 ...
 grid size 300 X 300  (MPI ranks: 1, OMP threads/rank: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2691,8 +2695,8 @@ Iteration =47000 ,Relative norm=1.182246e-04
 Iteration =48000 ,Relative norm=1.119573e-04
 Iteration =49000 ,Relative norm=1.060223e-04
 Iteration =50000 ,Relative norm=1.004019e-04
-Terminated on 50074 iterations, Relative Norm=9.999801e-05 
-[run] omp_mpi  nx=300 p=1 t=8 done in 26.4s
+Terminated on 50080 iterations, Relative Norm=9.996533e-05 
+[run] omp_mpi  nx=300 p=1 t=8 done in 14.0s
 [run] omp_mpi  nx=300 p=2 t=1 ...
 grid size 300 X 300  (MPI ranks: 2, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2746,8 +2750,8 @@ Iteration =47000 ,Relative norm=1.178805e-04
 Iteration =48000 ,Relative norm=1.116314e-04
 Iteration =49000 ,Relative norm=1.057137e-04
 Iteration =50000 ,Relative norm=1.001096e-04
-Terminated on 50021 iterations, Relative Norm=9.999516e-05 
-[run] omp_mpi  nx=300 p=2 t=1 done in 8.0s
+Terminated on 50030 iterations, Relative Norm=9.994615e-05 
+[run] omp_mpi  nx=300 p=2 t=1 done in 3.0s
 [run] omp_mpi  nx=300 p=2 t=2 ...
 grid size 300 X 300  (MPI ranks: 2, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2801,8 +2805,8 @@ Iteration =47000 ,Relative norm=1.178805e-04
 Iteration =48000 ,Relative norm=1.116314e-04
 Iteration =49000 ,Relative norm=1.057137e-04
 Iteration =50000 ,Relative norm=1.001096e-04
-Terminated on 50021 iterations, Relative Norm=9.999516e-05 
-[run] omp_mpi  nx=300 p=2 t=2 done in 7.2s
+Terminated on 50030 iterations, Relative Norm=9.994615e-05 
+[run] omp_mpi  nx=300 p=2 t=2 done in 3.0s
 [run] omp_mpi  nx=300 p=2 t=4 ...
 grid size 300 X 300  (MPI ranks: 2, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2856,8 +2860,8 @@ Iteration =47000 ,Relative norm=1.178805e-04
 Iteration =48000 ,Relative norm=1.116314e-04
 Iteration =49000 ,Relative norm=1.057137e-04
 Iteration =50000 ,Relative norm=1.001096e-04
-Terminated on 50021 iterations, Relative Norm=9.999516e-05 
-[run] omp_mpi  nx=300 p=2 t=4 done in 11.3s
+Terminated on 50030 iterations, Relative Norm=9.994615e-05 
+[run] omp_mpi  nx=300 p=2 t=4 done in 7.7s
 [run] omp_mpi  nx=300 p=4 t=1 ...
 grid size 300 X 300  (MPI ranks: 4, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2910,8 +2914,8 @@ Iteration =46000 ,Relative norm=1.241128e-04
 Iteration =47000 ,Relative norm=1.175334e-04
 Iteration =48000 ,Relative norm=1.113028e-04
 Iteration =49000 ,Relative norm=1.054025e-04
-Terminated on 49966 iterations, Relative Norm=9.999993e-05 
-[run] omp_mpi  nx=300 p=4 t=1 done in 8.4s
+Terminated on 49970 iterations, Relative Norm=9.997814e-05 
+[run] omp_mpi  nx=300 p=4 t=1 done in 2.9s
 [run] omp_mpi  nx=300 p=4 t=2 ...
 grid size 300 X 300  (MPI ranks: 4, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -2964,8 +2968,8 @@ Iteration =46000 ,Relative norm=1.241128e-04
 Iteration =47000 ,Relative norm=1.175334e-04
 Iteration =48000 ,Relative norm=1.113028e-04
 Iteration =49000 ,Relative norm=1.054025e-04
-Terminated on 49966 iterations, Relative Norm=9.999993e-05 
-[run] omp_mpi  nx=300 p=4 t=2 done in 7.0s
+Terminated on 49970 iterations, Relative Norm=9.997814e-05 
+[run] omp_mpi  nx=300 p=4 t=2 done in 3.9s
 [run] omp_mpi  nx=300 p=8 t=1 ...
 grid size 300 X 300  (MPI ranks: 8, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3018,8 +3022,8 @@ Iteration =46000 ,Relative norm=1.233782e-04
 Iteration =47000 ,Relative norm=1.168377e-04
 Iteration =48000 ,Relative norm=1.106439e-04
 Iteration =49000 ,Relative norm=1.047785e-04
-Terminated on 49857 iterations, Relative Norm=9.999992e-05 
-[run] omp_mpi  nx=300 p=8 t=1 done in 5.3s
+Terminated on 49860 iterations, Relative Norm=9.998358e-05 
+[run] omp_mpi  nx=300 p=8 t=1 done in 2.5s
 [run] omp_mpi  nx=350 p=1 t=1 ...
 grid size 350 X 350  (MPI ranks: 1, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3085,8 +3089,8 @@ Iteration =59000 ,Relative norm=1.143267e-04
 Iteration =60000 ,Relative norm=1.098378e-04
 Iteration =61000 ,Relative norm=1.055252e-04
 Iteration =62000 ,Relative norm=1.013819e-04
-Terminated on 62343 iterations, Relative Norm=9.999849e-05 
-[run] omp_mpi  nx=350 p=1 t=1 done in 26.4s
+Terminated on 62350 iterations, Relative Norm=9.997045e-05 
+[run] omp_mpi  nx=350 p=1 t=1 done in 10.3s
 [run] omp_mpi  nx=350 p=1 t=2 ...
 grid size 350 X 350  (MPI ranks: 1, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3152,8 +3156,8 @@ Iteration =59000 ,Relative norm=1.143267e-04
 Iteration =60000 ,Relative norm=1.098378e-04
 Iteration =61000 ,Relative norm=1.055252e-04
 Iteration =62000 ,Relative norm=1.013819e-04
-Terminated on 62343 iterations, Relative Norm=9.999849e-05 
-[run] omp_mpi  nx=350 p=1 t=2 done in 27.8s
+Terminated on 62350 iterations, Relative Norm=9.997045e-05 
+[run] omp_mpi  nx=350 p=1 t=2 done in 9.6s
 [run] omp_mpi  nx=350 p=1 t=4 ...
 grid size 350 X 350  (MPI ranks: 1, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3219,8 +3223,8 @@ Iteration =59000 ,Relative norm=1.143267e-04
 Iteration =60000 ,Relative norm=1.098378e-04
 Iteration =61000 ,Relative norm=1.055252e-04
 Iteration =62000 ,Relative norm=1.013819e-04
-Terminated on 62343 iterations, Relative Norm=9.999849e-05 
-[run] omp_mpi  nx=350 p=1 t=4 done in 32.4s
+Terminated on 62350 iterations, Relative Norm=9.997045e-05 
+[run] omp_mpi  nx=350 p=1 t=4 done in 14.1s
 [run] omp_mpi  nx=350 p=1 t=8 ...
 grid size 350 X 350  (MPI ranks: 1, OMP threads/rank: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3286,8 +3290,8 @@ Iteration =59000 ,Relative norm=1.143267e-04
 Iteration =60000 ,Relative norm=1.098378e-04
 Iteration =61000 ,Relative norm=1.055252e-04
 Iteration =62000 ,Relative norm=1.013819e-04
-Terminated on 62343 iterations, Relative Norm=9.999849e-05 
-[run] omp_mpi  nx=350 p=1 t=8 done in 44.4s
+Terminated on 62350 iterations, Relative Norm=9.997045e-05 
+[run] omp_mpi  nx=350 p=1 t=8 done in 25.5s
 [run] omp_mpi  nx=350 p=2 t=1 ...
 grid size 350 X 350  (MPI ranks: 2, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3353,8 +3357,8 @@ Iteration =59000 ,Relative norm=1.140414e-04
 Iteration =60000 ,Relative norm=1.095637e-04
 Iteration =61000 ,Relative norm=1.052618e-04
 Iteration =62000 ,Relative norm=1.011288e-04
-Terminated on 62281 iterations, Relative Norm=9.999696e-05 
-[run] omp_mpi  nx=350 p=2 t=1 done in 12.7s
+Terminated on 62290 iterations, Relative Norm=9.996091e-05 
+[run] omp_mpi  nx=350 p=2 t=1 done in 5.3s
 [run] omp_mpi  nx=350 p=2 t=2 ...
 grid size 350 X 350  (MPI ranks: 2, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3420,8 +3424,8 @@ Iteration =59000 ,Relative norm=1.140414e-04
 Iteration =60000 ,Relative norm=1.095637e-04
 Iteration =61000 ,Relative norm=1.052618e-04
 Iteration =62000 ,Relative norm=1.011288e-04
-Terminated on 62281 iterations, Relative Norm=9.999696e-05 
-[run] omp_mpi  nx=350 p=2 t=2 done in 13.7s
+Terminated on 62290 iterations, Relative Norm=9.996091e-05 
+[run] omp_mpi  nx=350 p=2 t=2 done in 7.5s
 [run] omp_mpi  nx=350 p=2 t=4 ...
 grid size 350 X 350  (MPI ranks: 2, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3487,8 +3491,8 @@ Iteration =59000 ,Relative norm=1.140414e-04
 Iteration =60000 ,Relative norm=1.095637e-04
 Iteration =61000 ,Relative norm=1.052618e-04
 Iteration =62000 ,Relative norm=1.011288e-04
-Terminated on 62281 iterations, Relative Norm=9.999696e-05 
-[run] omp_mpi  nx=350 p=2 t=4 done in 16.3s
+Terminated on 62290 iterations, Relative Norm=9.996091e-05 
+[run] omp_mpi  nx=350 p=2 t=4 done in 7.5s
 [run] omp_mpi  nx=350 p=4 t=1 ...
 grid size 350 X 350  (MPI ranks: 4, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3554,8 +3558,8 @@ Iteration =59000 ,Relative norm=1.137540e-04
 Iteration =60000 ,Relative norm=1.092876e-04
 Iteration =61000 ,Relative norm=1.049966e-04
 Iteration =62000 ,Relative norm=1.008740e-04
-Terminated on 62218 iterations, Relative Norm=9.999700e-05 
-[run] omp_mpi  nx=350 p=4 t=1 done in 7.3s
+Terminated on 62220 iterations, Relative Norm=9.998899e-05 
+[run] omp_mpi  nx=350 p=4 t=1 done in 2.9s
 [run] omp_mpi  nx=350 p=4 t=2 ...
 grid size 350 X 350  (MPI ranks: 4, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3621,8 +3625,8 @@ Iteration =59000 ,Relative norm=1.137540e-04
 Iteration =60000 ,Relative norm=1.092876e-04
 Iteration =61000 ,Relative norm=1.049966e-04
 Iteration =62000 ,Relative norm=1.008740e-04
-Terminated on 62218 iterations, Relative Norm=9.999700e-05 
-[run] omp_mpi  nx=350 p=4 t=2 done in 10.6s
+Terminated on 62220 iterations, Relative Norm=9.998899e-05 
+[run] omp_mpi  nx=350 p=4 t=2 done in 3.1s
 [run] omp_mpi  nx=350 p=8 t=1 ...
 grid size 350 X 350  (MPI ranks: 8, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3688,8 +3692,8 @@ Iteration =59000 ,Relative norm=1.131823e-04
 Iteration =60000 ,Relative norm=1.087383e-04
 Iteration =61000 ,Relative norm=1.044689e-04
 Iteration =62000 ,Relative norm=1.003670e-04
-Terminated on 62092 iterations, Relative Norm=9.999784e-05 
-[run] omp_mpi  nx=350 p=8 t=1 done in 8.5s
+Terminated on 62100 iterations, Relative Norm=9.996580e-05 
+[run] omp_mpi  nx=350 p=8 t=1 done in 3.3s
 [run] omp_mpi  nx=400 p=1 t=1 ...
 grid size 400 X 400  (MPI ranks: 1, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3767,8 +3771,8 @@ Iteration =71000 ,Relative norm=1.125972e-04
 Iteration =72000 ,Relative norm=1.091942e-04
 Iteration =73000 ,Relative norm=1.058940e-04
 Iteration =74000 ,Relative norm=1.026935e-04
-Terminated on 74867 iterations, Relative Norm=9.999714e-05 
-[run] omp_mpi  nx=400 p=1 t=1 done in 41.6s
+Terminated on 74870 iterations, Relative Norm=9.998794e-05 
+[run] omp_mpi  nx=400 p=1 t=1 done in 16.1s
 [run] omp_mpi  nx=400 p=1 t=2 ...
 grid size 400 X 400  (MPI ranks: 1, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3846,8 +3850,8 @@ Iteration =71000 ,Relative norm=1.125972e-04
 Iteration =72000 ,Relative norm=1.091942e-04
 Iteration =73000 ,Relative norm=1.058940e-04
 Iteration =74000 ,Relative norm=1.026935e-04
-Terminated on 74867 iterations, Relative Norm=9.999714e-05 
-[run] omp_mpi  nx=400 p=1 t=2 done in 44.1s
+Terminated on 74870 iterations, Relative Norm=9.998794e-05 
+[run] omp_mpi  nx=400 p=1 t=2 done in 15.9s
 [run] omp_mpi  nx=400 p=1 t=4 ...
 grid size 400 X 400  (MPI ranks: 1, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -3925,8 +3929,8 @@ Iteration =71000 ,Relative norm=1.125972e-04
 Iteration =72000 ,Relative norm=1.091942e-04
 Iteration =73000 ,Relative norm=1.058940e-04
 Iteration =74000 ,Relative norm=1.026935e-04
-Terminated on 74867 iterations, Relative Norm=9.999714e-05 
-[run] omp_mpi  nx=400 p=1 t=4 done in 52.2s
+Terminated on 74870 iterations, Relative Norm=9.998794e-05 
+[run] omp_mpi  nx=400 p=1 t=4 done in 23.3s
 [run] omp_mpi  nx=400 p=1 t=8 ...
 grid size 400 X 400  (MPI ranks: 1, OMP threads/rank: 8)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -4004,8 +4008,8 @@ Iteration =71000 ,Relative norm=1.125972e-04
 Iteration =72000 ,Relative norm=1.091942e-04
 Iteration =73000 ,Relative norm=1.058940e-04
 Iteration =74000 ,Relative norm=1.026935e-04
-Terminated on 74867 iterations, Relative Norm=9.999714e-05 
-[run] omp_mpi  nx=400 p=1 t=8 done in 73.6s
+Terminated on 74870 iterations, Relative Norm=9.998794e-05 
+[run] omp_mpi  nx=400 p=1 t=8 done in 40.6s
 [run] omp_mpi  nx=400 p=2 t=1 ...
 grid size 400 X 400  (MPI ranks: 2, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -4083,8 +4087,8 @@ Iteration =71000 ,Relative norm=1.123514e-04
 Iteration =72000 ,Relative norm=1.089557e-04
 Iteration =73000 ,Relative norm=1.056628e-04
 Iteration =74000 ,Relative norm=1.024693e-04
-Terminated on 74795 iterations, Relative Norm=9.999950e-05 
-[run] omp_mpi  nx=400 p=2 t=1 done in 20.8s
+Terminated on 74800 iterations, Relative Norm=9.998415e-05 
+[run] omp_mpi  nx=400 p=2 t=1 done in 10.2s
 [run] omp_mpi  nx=400 p=2 t=2 ...
 grid size 400 X 400  (MPI ranks: 2, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -4162,8 +4166,8 @@ Iteration =71000 ,Relative norm=1.123514e-04
 Iteration =72000 ,Relative norm=1.089557e-04
 Iteration =73000 ,Relative norm=1.056628e-04
 Iteration =74000 ,Relative norm=1.024693e-04
-Terminated on 74795 iterations, Relative Norm=9.999950e-05 
-[run] omp_mpi  nx=400 p=2 t=2 done in 16.6s
+Terminated on 74800 iterations, Relative Norm=9.998415e-05 
+[run] omp_mpi  nx=400 p=2 t=2 done in 6.8s
 [run] omp_mpi  nx=400 p=2 t=4 ...
 grid size 400 X 400  (MPI ranks: 2, OMP threads/rank: 4)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -4241,8 +4245,8 @@ Iteration =71000 ,Relative norm=1.123514e-04
 Iteration =72000 ,Relative norm=1.089557e-04
 Iteration =73000 ,Relative norm=1.056628e-04
 Iteration =74000 ,Relative norm=1.024693e-04
-Terminated on 74795 iterations, Relative Norm=9.999950e-05 
-[run] omp_mpi  nx=400 p=2 t=4 done in 20.0s
+Terminated on 74800 iterations, Relative Norm=9.998415e-05 
+[run] omp_mpi  nx=400 p=2 t=4 done in 11.9s
 [run] omp_mpi  nx=400 p=4 t=1 ...
 grid size 400 X 400  (MPI ranks: 4, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -4320,8 +4324,8 @@ Iteration =71000 ,Relative norm=1.121038e-04
 Iteration =72000 ,Relative norm=1.087156e-04
 Iteration =73000 ,Relative norm=1.054299e-04
 Iteration =74000 ,Relative norm=1.022435e-04
-Terminated on 74723 iterations, Relative Norm=9.999988e-05 
-[run] omp_mpi  nx=400 p=4 t=1 done in 22.2s
+Terminated on 74730 iterations, Relative Norm=9.997840e-05 
+[run] omp_mpi  nx=400 p=4 t=1 done in 3.9s
 [run] omp_mpi  nx=400 p=4 t=2 ...
 grid size 400 X 400  (MPI ranks: 4, OMP threads/rank: 2)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -4399,8 +4403,8 @@ Iteration =71000 ,Relative norm=1.121038e-04
 Iteration =72000 ,Relative norm=1.087156e-04
 Iteration =73000 ,Relative norm=1.054299e-04
 Iteration =74000 ,Relative norm=1.022435e-04
-Terminated on 74723 iterations, Relative Norm=9.999988e-05 
-[run] omp_mpi  nx=400 p=4 t=2 done in 17.9s
+Terminated on 74730 iterations, Relative Norm=9.997840e-05 
+[run] omp_mpi  nx=400 p=4 t=2 done in 8.5s
 [run] omp_mpi  nx=400 p=8 t=1 ...
 grid size 400 X 400  (MPI ranks: 8, OMP threads/rank: 1)
 Iteration =0 ,Relative norm=1.000000e+00
@@ -4478,8 +4482,8 @@ Iteration =71000 ,Relative norm=1.116078e-04
 Iteration =72000 ,Relative norm=1.082346e-04
 Iteration =73000 ,Relative norm=1.049634e-04
 Iteration =74000 ,Relative norm=1.017911e-04
-Terminated on 74579 iterations, Relative Norm=9.999837e-05 
-[run] omp_mpi  nx=400 p=8 t=1 done in 12.7s
+Terminated on 74580 iterations, Relative Norm=9.999530e-05 
+[run] omp_mpi  nx=400 p=8 t=1 done in 4.2s
 [warn] No GPU detected on this node (nvidia-smi found no device). Skipping GPU runs – submit via submit_gpu_pipeline.sh to boost_usr_prod.
 Saved: /leonardo/home/userexternal/aamaduz1/exam_HPC_master_HPQC/scripts/plots/methods_comparison.png
 Saved: /leonardo/home/userexternal/aamaduz1/exam_HPC_master_HPQC/scripts/plots/speedup_vs_grid.png
