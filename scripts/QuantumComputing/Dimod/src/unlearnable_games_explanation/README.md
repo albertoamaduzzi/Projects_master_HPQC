@@ -20,6 +20,8 @@ skgame/                          Python package (NumPy/SciPy/Numba numerics, Sym
   optim/solvers.py               exact, greedy, SA, PT, τ-EO, SDP+GW, SK-game learning, dimod wrappers
   optim/quantum.py               QuantumAnnealingSolver (D-Wave clique / embedding composite) — the plug-in point
   optim/benchmark.py             scaling study: success probability, residual, TTS_99, breakdown size N*
+  optim/embedding.py             Zephyr / Pegasus topologies, clique + heuristic embeddings, chain stats, cache
+  optim/backends.py              annealing back-ends device:topology:strategy (QPU or simulated), chain knobs
   optim/regimes.py               parameter points where the optimum is easy / hard (planner phase x game phase)
   outputs/                       one class per computation and per figure (objects of the category)
   registry.py                    Output base class, registry, caching pipeline, category export
@@ -44,7 +46,7 @@ python -m skgame run Fig11C2vsEps --preset paper      # one figure (and only its
 python -m skgame deps Fig17OrderParameter             # upstream / downstream / derivation
 python -m skgame category                # export the category for Catlab
 python -m skgame.docgen                  # regenerate docs 02-05
-pytest                                   # 99 tests
+pytest                                   # 107 tests
 ```
 
 `quick` presets are scaled-down versions of the paper's (N ≤ 512, shorter times, fewer samples); `paper` presets use the paper's sizes where stated (N up to 1024, t up to 10^8 — hours to days). Caching: an output's hash covers its parameters, its class source code and its inputs' hashes, so editing a class recomputes exactly its downstream closure.
@@ -78,10 +80,12 @@ For each regime of `skgame/optim/regimes.py` (ferromagnetic / boundary / spin-gl
 ```bash
 python main_simulation.py init --preset smoke --out results/smoke   # presets: smoke, small, full
 python main_simulation.py classical --out results/smoke
-python main_simulation.py sim --out results/smoke                   # or `qpu` with a Leap token
+python main_simulation.py sim --out results/smoke                   # or `qpu` with a Leap token: Zephyr and Pegasus
 python main_simulation.py analyze --out results/smoke               # summary.csv + figures
 ```
-On Cineca: see [README_CINECA.md](README_CINECA.md).
+The quantum annealer runs through `skgame/optim/backends.py`: a back-end is `device:topology:strategy`, by default `qpu:zephyr:clique` (Advantage2) and `qpu:pegasus:clique` (Advantage), both with the all-to-all clique embedding of `skgame/optim/embedding.py`, on the same instances and settings; `analyze` writes `summary/backend_comparison.csv` with the winner per (problem class, N). `sim:zephyr:clique` / `sim:pegasus:clique` run the same embedded problem with classical simulated annealing (no token). How the embedding and the chains work, step by step with figures: [`../visualization/embedding_explanation/`](../visualization/embedding_explanation/README.md).
+
+On Cineca (environment built locally and uploaded, QPU from Leonardo or from your computer): see [README_CINECA.md](README_CINECA.md).
 
 Caveat on "breakdown": above `n_exact` the reference is only best-known, so N* measures when a solver stops matching the best of the ensemble within its budget, not when it stops finding the true optimum. To push certification further, add an exact branch-and-bound / SDP-based solver (not included).
 

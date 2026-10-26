@@ -1,0 +1,13 @@
+# Runtime of main_simulation.py and the tests. The skgame package itself is NOT installed:
+# every script runs from this directory, so `import skgame` finds the source tree.
+numpy
+scipy
+matplotlib
+sympy
+numba
+dimod
+dwave-samplers
+dwave-system
+minorminer
+networkx
+pytest

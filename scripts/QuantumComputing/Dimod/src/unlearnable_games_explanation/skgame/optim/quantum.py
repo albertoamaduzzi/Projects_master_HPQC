@@ -1,4 +1,7 @@
-"""Plug-in point for quantum annealing.
+"""Plug-in point for quantum annealing (single solver, used by the planner benchmark).
+
+For the Zephyr / Pegasus comparison and every embedding knob (strategy, chain strength,
+chain-break method, polishing) use `skgame.optim.backends.AnnealBackend`.
 
 `QuantumAnnealingSolver` is a `DimodSamplerSolver` whose sampler factory builds a D-Wave QPU
 composite (EmbeddingComposite(DWaveSampler()) by default). The planner problem is a dense
@@ -87,23 +90,7 @@ class QuantumAnnealingSolver(DimodSamplerSolver):
         ss = self.sampler.sample(P.to_bqm(), **kw)
         ss.resolve()
         wall = time.perf_counter() - t0
-        agg = ss.aggregate()
-        S = np.asarray(agg.record.sample, float)[:, [list(agg.variables).index(i) for i in range(P.N)]]
-        counts = np.asarray(agg.record.num_occurrences, int)
-        rewards = np.atleast_1d(P.reward(S))
-        order = np.argsort(-rewards)
-        info = {"wall_seconds": wall, "num_reads": int(counts.sum()), "solver": self.solver_id(),
-                "sample_kwargs": {k: v for k, v in kw.items() if k != "seed"}}
-        timing = ss.info.get("timing")
-        if timing:
-            info["timing_us"] = {k: float(v) for k, v in timing.items() if np.isscalar(v)}
-        if "chain_break_fraction" in ss.record.dtype.names:
-            info["chain_break_fraction_mean"] = float(np.average(ss.record.chain_break_fraction,
-                                                                 weights=ss.record.num_occurrences))
-        if "embedding_context" in ss.info:
-            cs = ss.info["embedding_context"].get("chain_strength")
-            info["chain_strength"] = float(cs) if np.isscalar(cs) else None
-        best = S[order[0]]
-        return {"rewards": rewards[order].tolist(), "counts": counts[order].tolist(),
-                "best_reward": float(rewards[order[0]]),
-                "best_S": "".join("+" if x > 0 else "-" for x in best), "info": info}
+        from .backends import sampleset_statistics
+        out = sampleset_statistics(ss, P, wall)
+        out["info"].update(solver=self.solver_id(), sample_kwargs={k: v for k, v in kw.items() if k != "seed"})
+        return out
