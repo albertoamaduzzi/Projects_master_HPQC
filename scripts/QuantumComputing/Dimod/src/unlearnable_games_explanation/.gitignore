@@ -1,0 +1,5 @@
+results/
+logs/
+.numba_cache/
+*.tmp*
+__pycache__/

@@ -13,6 +13,7 @@ dependencies = ["numpy>=1.24", "scipy>=1.11", "matplotlib>=3.7", "sympy>=1.12", 
 dwave = ["dimod>=0.12", "dwave-samplers>=1.2"]
 qpu = ["dwave-system>=1.21"]
 test = ["pytest>=7"]
+nb = ["jupyter", "nbconvert", "ipykernel"]
 
 [project.scripts]
 skgame = "skgame.cli:main"

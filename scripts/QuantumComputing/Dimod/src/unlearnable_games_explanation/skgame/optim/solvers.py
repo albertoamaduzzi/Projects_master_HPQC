@@ -376,7 +376,11 @@ class DimodSamplerSolver(Solver):
             self._sampler = self._factory()
         bqm = P.to_bqm()
         kw = dict(self.sample_kwargs)
-        kw.setdefault("seed", int(rng.integers(2**31)))
+        # only samplers that declare a 'seed' parameter get one: the QPU rejects unknown kwargs
+        # server side (not with a TypeError), so trying and catching is not enough there
+        params = getattr(self._sampler, "parameters", None)
+        if params is None or "seed" in params:
+            kw.setdefault("seed", int(rng.integers(2**31)))
         try:
             ss = self._sampler.sample(bqm, **kw)
         except TypeError:
