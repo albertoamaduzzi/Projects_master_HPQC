@@ -4,3 +4,4 @@ logs/
 *.tmp*
 __pycache__/
 skgame_wheelhouse_py*
+.venv/

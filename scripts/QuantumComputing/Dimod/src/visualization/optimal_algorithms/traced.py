@@ -47,22 +47,28 @@ def gray_code(W, n_steps=None):
 
 
 # --------------------------------------------------------------------- steepest descent --
-def steepest_descent(W, S0):
+def steepest_descent(W, S0, record=False):
     """Flip the most unsatisfied spin (most negative lambda) until every lambda >= 0."""
     S = S0.copy()
     h = W @ S
     Es = [energy(W, S)]
+    hist = [S.copy()]
     while True:
         lam = S * h
         k = int(np.argmin(lam))
         if lam[k] >= -1e-12:
             break
         Es.append(Es[-1] + flip(W, S, h, k))
-    return {"E": np.array(Es), "S": S}
+        if record:
+            hist.append(S.copy())
+    out = {"E": np.array(Es), "S": S}
+    if record:
+        out["S_hist"] = np.array(hist)
+    return out
 
 
 # ------------------------------------------------------------------ simulated annealing --
-def simulated_annealing(W, S0, betas, sweeps_per_beta, rng):
+def simulated_annealing(W, S0, betas, sweeps_per_beta, rng, record=False):
     """Metropolis single flips: pick k at random, accept with min(1, exp(-beta dH_k)); one
     sweep = N attempts; beta follows the schedule `betas` (cold at the end)."""
     N = W.shape[0]
@@ -71,6 +77,7 @@ def simulated_annealing(W, S0, betas, sweeps_per_beta, rng):
     E = energy(W, S)
     Es, acc = [E], []
     best, bestS = E, S.copy()
+    hist, bhist = [S.copy()], [betas[0]]
     for b in betas:
         a = 0
         for _ in range(sweeps_per_beta):
@@ -83,15 +90,21 @@ def simulated_annealing(W, S0, betas, sweeps_per_beta, rng):
                     if E < best:
                         best, bestS = E, S.copy()
             Es.append(E)
+            if record:
+                hist.append(S.copy())
+                bhist.append(b)
         acc.append(a / (sweeps_per_beta * N))
     # like skgame's SimulatedAnnealing: keep the best state seen, then relax it by steepest descent
     polished = steepest_descent(W, bestS)
-    return {"E": np.array(Es), "acceptance": np.array(acc), "S": S, "best": best,
-            "best_polished": polished["E"][-1]}
+    out = {"E": np.array(Es), "acceptance": np.array(acc), "S": S, "best": best,
+           "best_polished": polished["E"][-1]}
+    if record:
+        out.update(S_hist=np.array(hist), beta_hist=np.array(bhist))
+    return out
 
 
 # ------------------------------------------------------------------ parallel tempering ---
-def parallel_tempering(W, betas, n_sweeps, rng):
+def parallel_tempering(W, betas, n_sweeps, rng, record=False):
     """One replica per temperature; Metropolis sweeps on each, then swap neighbouring
     temperatures with probability min(1, exp((beta_k - beta_{k+1}) (E_k - E_{k+1})))."""
     R, N = len(betas), W.shape[0]
@@ -102,7 +115,7 @@ def parallel_tempering(W, betas, n_sweeps, rng):
     E_hist, where = [], []                        # energy at each temperature; temperature of each replica
     swaps_try, swaps_acc = np.zeros(R - 1), np.zeros(R - 1)
     best = E.min()
-    best_hist = []
+    best_hist, S_hist = [], []
     for _ in range(n_sweeps):
         for t in range(R):
             r = perm[t]
@@ -121,15 +134,20 @@ def parallel_tempering(W, betas, n_sweeps, rng):
         best = min(best, E.min())
         best_hist.append(best)
         E_hist.append(E[perm].copy())
+        if record:
+            S_hist.append(S[perm].copy())          # (temperature, spin), coldest last
         inv = np.empty(R, int)
         inv[perm] = np.arange(R)
         where.append(inv.copy())
-    return {"E": np.array(E_hist), "temperature_of_replica": np.array(where),
-            "swap_rate": swaps_acc / np.maximum(swaps_try, 1), "best": np.array(best_hist)}
+    out = {"E": np.array(E_hist), "temperature_of_replica": np.array(where),
+           "swap_rate": swaps_acc / np.maximum(swaps_try, 1), "best": np.array(best_hist)}
+    if record:
+        out["S_hist"] = np.array(S_hist)
+    return out
 
 
 # --------------------------------------------------------------- extremal optimisation ---
-def tau_eo(W, S0, n_steps, tau, rng):
+def tau_eo(W, S0, n_steps, tau, rng, record=False):
     """Rank the spins from most to least unsatisfied (lambda ascending); flip the spin of rank k
     with probability ~ k^-tau, ALWAYS (no acceptance test). Keeps the best state seen."""
     N = W.shape[0]
@@ -138,20 +156,26 @@ def tau_eo(W, S0, n_steps, tau, rng):
     E = energy(W, S)
     p = np.arange(1, N + 1, dtype=float) ** (-tau)
     cdf = np.cumsum(p) / p.sum()
-    Es, ranks = [E], []
+    Es, ranks, hist, moved = [E], [], [S.copy()], []
     best = E
     for _ in range(n_steps):
         order = np.argsort(S * h)
         r = int(np.searchsorted(cdf, rng.random()))
         E += flip(W, S, h, order[r])
         ranks.append(r + 1)
+        moved.append(int(order[r]))
         Es.append(E)
         best = min(best, E)
-    return {"E": np.array(Es), "rank": np.array(ranks), "best": best}
+        if record:
+            hist.append(S.copy())
+    out = {"E": np.array(Es), "rank": np.array(ranks), "best": best, "moved": np.array(moved)}
+    if record:
+        out["S_hist"] = np.array(hist)
+    return out
 
 
 # ------------------------------------------------------------------------- tabu search ---
-def tabu_search(W, S0, n_steps, tenure):
+def tabu_search(W, S0, n_steps, tenure, record=False):
     """Each step flips the best spin that is not tabu (lowest dH = 2 lambda_k, even if dH > 0);
     a flipped spin stays tabu for `tenure` steps (aspiration: allowed if it beats the best)."""
     N = W.shape[0]
@@ -160,7 +184,7 @@ def tabu_search(W, S0, n_steps, tenure):
     E = energy(W, S)
     best = E
     until = np.zeros(N, int)
-    Es, moved = [E], []
+    Es, moved, hist = [E], [], [S.copy()]
     for t in range(1, n_steps + 1):
         dH = 2.0 * S * h
         ok = (until < t) | (E + dH < best - 1e-12)
@@ -171,16 +195,21 @@ def tabu_search(W, S0, n_steps, tenure):
         best = min(best, E)
         Es.append(E)
         moved.append(k)
-    return {"E": np.array(Es), "moved": np.array(moved), "best": best}
+        if record:
+            hist.append(S.copy())
+    out = {"E": np.array(Es), "moved": np.array(moved), "best": best}
+    if record:
+        out["S_hist"] = np.array(hist)
+    return out
 
 
 # ----------------------------------------------------------------------- game learning ---
-def game_learning(W, alpha, steps, rng, beta0=None):
+def game_learning(W, alpha, steps, rng, beta0=None, record=False):
     """The SK game as an optimiser (SKGameLearner): S = sign Q (or noisy with annealed beta),
     Q <- (1-alpha) Q + alpha h, with h = W S the local fields (= rewards R_i at eps = 0)."""
     N = W.shape[0]
     Q = rng.standard_normal(N)
-    Es, flips = [], []
+    Es, flips, hist, Qhist = [], [], [], []
     S_prev = None
     for t in range(steps):
         if beta0 is None:
@@ -192,18 +221,24 @@ def game_learning(W, alpha, steps, rng, beta0=None):
         Es.append(-0.5 * S @ h)
         flips.append(0 if S_prev is None else int(np.sum(S != S_prev)))
         S_prev = S
+        if record:
+            hist.append(S.copy())
+            Qhist.append(Q.copy())
         Q = (1 - alpha) * Q + alpha * h
-    return {"E": np.array(Es), "flips": np.array(flips), "S": S, "lambda": S * (W @ S)}
+    out = {"E": np.array(Es), "flips": np.array(flips), "S": S, "lambda": S * (W @ S)}
+    if record:
+        out.update(S_hist=np.array(hist), Q_hist=np.array(Qhist))
+    return out
 
 
 # ------------------------------------------------------------------ SDP + Goemans-Williamson
-def sdp_mixing(W, k, iters, rng):
+def sdp_mixing(W, k, iters, rng, record=False):
     """Relax S_i in {-1,1} to unit vectors v_i in R^k and maximise sum_ij W_ij v_i.v_j by the
     mixing method: v_i <- normalise(sum_j W_ij v_j), one spin at a time."""
     N = W.shape[0]
     V = rng.standard_normal((N, k))
     V /= np.linalg.norm(V, axis=1, keepdims=True)
-    obj = []
+    obj, Vh = [], [V.copy()]
     for _ in range(iters):
         for i in range(N):
             g = W[i] @ V
@@ -211,7 +246,12 @@ def sdp_mixing(W, k, iters, rng):
             if n > 0:
                 V[i] = g / n
         obj.append(-0.5 * np.einsum("ij,ik,jk->", W, V, V))      # relaxed energy (lower bound on H)
-    return {"V": V, "relaxed_energy": np.array(obj)}
+        if record:
+            Vh.append(V.copy())
+    out = {"V": V, "relaxed_energy": np.array(obj)}
+    if record:
+        out["V_hist"] = np.array(Vh)
+    return out
 
 
 def gw_rounding(W, V, n, rng):
@@ -260,7 +300,7 @@ def qa_spectrum(W, s_grid, n_levels=8):
     return np.array(out)
 
 
-def qa_evolve(W, T, n_steps=400):
+def qa_evolve(W, T, n_steps=400, record_every=0):
     """Schrodinger evolution |psi(0)> = |+>^N (ground state of the transverse field) under H(t/T)
     for total time T (units hbar / energy scale). Returns the final probabilities of every
     classical configuration."""
@@ -268,7 +308,12 @@ def qa_evolve(W, T, n_steps=400):
     scale = np.abs(W).max()
     psi = np.full(1 << N, 1 / np.sqrt(1 << N), dtype=complex)
     dt = T / n_steps
+    hist = [(0.0, np.abs(psi) ** 2)]
     for m in range(n_steps):
         s = (m + 0.5) / n_steps
         psi = expm_multiply(-1j * dt * qa_hamiltonian(W, s, scale), psi)
+        if record_every and (m + 1) % record_every == 0:
+            hist.append(((m + 1) / n_steps, np.abs(psi) ** 2))
+    if record_every:
+        return np.abs(psi) ** 2, hist
     return np.abs(psi) ** 2
