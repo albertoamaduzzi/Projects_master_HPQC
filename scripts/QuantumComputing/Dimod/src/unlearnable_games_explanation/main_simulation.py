@@ -6,8 +6,10 @@ every N on a linear grid, on the same instances J:
   * reference optimum of the planner, max_S (1/N) S^T J S: exact (Gray code) for N <= n_exact,
     best known above (long parallel tempering + every solver, + the annealer at analysis time);
   * classical optimisers (greedy, SA, PT, tau-EO, SDP+GW, dimod SA / tabu);
-  * the quantum annealer through dimod (D-Wave QPU via DWaveCliqueSampler, or the classical
-    simulated-annealing sampler with the same interface for dry runs);
+  * the quantum annealer through dimod, one or more back-ends (skgame.optim.backends):
+    `qpu:zephyr:clique` (Advantage2) and `qpu:pegasus:clique` (Advantage) by default, same
+    instances and settings, so `analyze` says which topology finds the optimum more often;
+    `sim:...` back-ends run the same pipeline with classical simulated annealing (no token);
   * the game itself (learning dynamics at the regime's alpha, beta, eps): its phase and whether
     the state it settles in is the optimum.
 
@@ -16,10 +18,12 @@ run in parallel with `classical`):
 
   python main_simulation.py init       --preset full --out results/full
   python main_simulation.py plan       --out results/full       # sizes, units, QPU budget
+  python main_simulation.py instances  --out results/full       # optional: write all J now
   python main_simulation.py classical  --out results/full [--task i]   # compute nodes
-  python main_simulation.py qpu        --out results/full       # needs internet + Leap token
-  python main_simulation.py sim        --out results/full       # same, simulated annealing, no token
-  python main_simulation.py analyze    --out results/full       # summary.csv + figures
+  python main_simulation.py embed      --out results/full       # embeddings + chain stats (no QPU time)
+  python main_simulation.py qpu        --out results/full       # every qpu back-end; internet + Leap token
+  python main_simulation.py sim        --out results/full       # sim:logical (or --backend sim:zephyr:clique)
+  python main_simulation.py analyze    --out results/full       # summary.csv, figures, Zephyr vs Pegasus
 
 `classical --task i` runs only the i-th problem class (Slurm array index). The QPU stage only
 reads instances and calls the sampler, so it is cheap on CPU and can run on a login node.
@@ -66,8 +70,12 @@ class CampaignConfig:
     window: int = 32                # game observation window (phase + reward)
     num_reads: int = 100            # annealer reads per call
     annealing_time: float = 20.0    # microseconds (QPU only)
-    chain_strength: float | None = None   # None: DWaveCliqueSampler default
+    backends: list = field(default_factory=lambda: ["qpu:zephyr:clique", "qpu:pegasus:clique"])
+    chain_strength_prefactor: float = 1.414   # chain strength = prefactor x uniform torque compensation
+    chain_break_method: str = "majority_vote"  # majority_vote | minimize_energy | weighted_random | discard
+    polish: bool = True             # also score every read after greedy single-flip descent
     sim_num_reads: int = 100        # reads per call when the annealer is the classical simulator
+    sim_num_sweeps: int = 1000
     seed: int = 2024
 
 
@@ -77,7 +85,8 @@ PRESETS = {
     # tens of minutes on one core; N up to 64 with step 4
     "small": dict(Ns=list(range(8, 65, 4)), n_instances=4, n_runs=3, n_exact=24, ref_sweeps=2000,
                   ref_restarts=2, game_runs=8, t_alpha=300, window=64, num_reads=500),
-    # the production campaign: N = 8, 16, ..., 160 (QPU clique limit ~170 on Advantage)
+    # the production campaign: N = 8, 16, ..., 160 (clique limit ~180 on ideal Zephyr/Pegasus,
+    # a bit less on real chips: `qpu --check` prints it and larger N are skipped)
     "full": dict(Ns=list(range(8, 161, 8)), n_instances=5, n_runs=5, n_exact=24, solver_budget="paper",
                  ref_sweeps=5000, ref_restarts=2, game_runs=16, t_alpha=300, window=64, num_reads=1000),
 }
@@ -244,12 +253,18 @@ def stage_classical(out: Path, cfg: CampaignConfig, keys=None, log=print) -> Non
 
 
 # ============================================================================ anneal ====
-def make_annealer(cfg: CampaignConfig, sampler: str, solver_name=None):
-    from skgame.optim.quantum import QuantumAnnealingSolver
-    if sampler == "sim":
-        return QuantumAnnealingSolver(num_reads=cfg.sim_num_reads, use_simulator=True, max_N=None)
-    return QuantumAnnealingSolver(num_reads=cfg.num_reads, annealing_time=cfg.annealing_time, clique=True,
-                                  chain_strength=cfg.chain_strength, solver_name=solver_name, max_N=None)
+def anneal_settings(cfg: CampaignConfig, solver_name=None):
+    from skgame.optim.backends import AnnealSettings
+    return AnnealSettings(num_reads=cfg.num_reads, annealing_time=cfg.annealing_time,
+                          chain_strength_prefactor=cfg.chain_strength_prefactor,
+                          chain_break_method=cfg.chain_break_method, polish=cfg.polish,
+                          sim_num_reads=cfg.sim_num_reads, sim_num_sweeps=cfg.sim_num_sweeps,
+                          solver_name=solver_name)
+
+
+def make_backend(out: Path, cfg: CampaignConfig, spec: str, solver_name=None):
+    from skgame.optim.backends import AnnealBackend
+    return AnnealBackend(spec, anneal_settings(cfg, solver_name), cache_root=out / "embeddings")
 
 
 def anneal_units(out: Path, cfg: CampaignConfig, keys=None, max_N=None):
@@ -264,20 +279,50 @@ def anneal_units(out: Path, cfg: CampaignConfig, keys=None, max_N=None):
                 yield key, eps, J0, N, b
 
 
-def stage_anneal(out: Path, cfg: CampaignConfig, sampler: str = "sim", keys=None, max_calls=None,
-                 solver_name=None, check_only=False, log=print, retries=3) -> None:
-    qa = make_annealer(cfg, sampler, solver_name)
-    limit = qa.largest_problem()
-    log(f"[anneal] sampler={sampler} solver={qa.solver_id()} largest_problem={limit}")
+def stage_embed(out: Path, cfg: CampaignConfig, specs, solver_name=None, log=print) -> list[dict]:
+    """Compute (and cache) the embedding of every N for every back-end; no QPU time is used.
+    For qpu back-ends this needs the token (to read the real working graph)."""
+    rows = []
+    for spec in specs:
+        be = make_backend(out, cfg, spec, solver_name)
+        if not be.embedded:
+            continue
+        limit = be.largest_problem()
+        log(f"[embed] {spec}: graph {be.graph_id()} largest K_N = {limit}")
+        for N in cfg.Ns:
+            if limit is not None and N > limit:
+                log(f"[embed]   N={N:4d}: too large")
+                continue
+            from skgame.optim.embedding import chain_stats
+            st = chain_stats(be.embedding(N))
+            rows.append(dict(backend=spec, graph=be.graph_id(), N=N, largest_N=limit, **st))
+            log(f"[embed]   N={N:4d}: {st['n_qubits']:5d} qubits, chain length mean {st['chain_len_mean']:.2f}"
+                f" max {st['chain_len_max']}")
+    if rows:
+        path = out / "summary" / "embeddings.csv"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(rows[0]))
+            w.writeheader()
+            w.writerows(rows)
+        log(f"[embed] -> {path}")
+    return rows
+
+
+def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys=None, max_calls=None,
+                 solver_name=None, check_only=False, log=print, retries=3, backend=None) -> None:
+    be = backend or make_backend(out, cfg, spec, solver_name)
+    limit = be.largest_problem()
+    log(f"[anneal] backend={be.spec} solver={be.solver_id()} largest_problem={limit}")
     units = list(anneal_units(out, cfg, keys))
     too_big = sorted({u[3] for u in units if limit is not None and u[3] > limit})
     if too_big:
         log(f"[anneal] skipping N={too_big}: above the largest embeddable clique ({limit})")
     todo = [u for u in units if (limit is None or u[3] <= limit)
-            and not anneal_path(out, sampler, u[0], u[3], u[4]).exists()]
+            and not anneal_path(out, be.label, u[0], u[3], u[4]).exists()]
     log(f"[anneal] {len(units)} calls in the campaign, {len(todo)} still to do")
     if check_only:
-        _estimate_qpu_time(qa, todo, cfg, log)
+        _estimate_qpu_time(be, todo, log)
         return
     total_access = 0.0
     for n, (key, eps, J0, N, b) in enumerate(todo):
@@ -288,35 +333,34 @@ def stage_anneal(out: Path, cfg: CampaignConfig, sampler: str = "sim", keys=None
         P = PlannerProblem(J[b])
         for attempt in range(retries + 1):
             try:
-                res = qa.sample_problem(P, rng=np.random.SeedSequence([cfg.seed, 3, N, b]))
+                res = be.sample(P, rng=np.random.SeedSequence([cfg.seed, 3, N, b]))
                 break
             except Exception as exc:                     # network hiccups, solver busy, ...
                 if attempt == retries:
                     raise
                 log(f"[anneal] {key} N={N} i={b}: {type(exc).__name__}: {exc}; retry in {2 ** (attempt + 1)}s")
                 time.sleep(2 ** (attempt + 1))
-        res.update(key=key, eps=eps, J0=J0, N=N, instance=b, sampler=sampler)
-        _write_json(anneal_path(out, sampler, key, N, b), res)
+        res.update(key=key, eps=eps, J0=J0, N=N, instance=b, backend=be.spec)
+        _write_json(anneal_path(out, be.label, key, N, b), res)
         acc = res["info"].get("timing_us", {}).get("qpu_access_time", 0.0) / 1e6
         total_access += acc
-        log(f"[anneal] {n + 1:4d}/{len(todo)} {key:12s} N={N:4d} i={b} best={res['best_reward']:.5f} "
-            f"wall={res['info']['wall_seconds']:.2f}s qpu_access={acc * 1e3:.1f}ms (total {total_access:.2f}s)")
+        cbf = res["info"].get("chain_break_fraction_mean")
+        log(f"[anneal] {n + 1:4d}/{len(todo)} {be.label} {key:10s} N={N:4d} i={b} best={res['best_reward']:.5f} "
+            f"chain_breaks={'-' if cbf is None else f'{cbf:.3f}'} qpu_access={acc * 1e3:.1f}ms (total {total_access:.2f}s)")
 
 
-def _estimate_qpu_time(qa, todo, cfg, log) -> None:
-    """Estimate of the QPU access time still to spend, from the solver's own timing model."""
-    solver = getattr(getattr(qa.sampler, "child", None), "solver", None)
-    if solver is None or not hasattr(solver, "estimate_qpu_access_time"):
-        log("[anneal] no timing model available (simulator?): nothing to estimate")
+def _estimate_qpu_time(be, todo, log) -> None:
+    """QPU access time still to spend, from the solver's own timing model (no QPU time used)."""
+    if be.device != "qpu":
+        log("[anneal] not a QPU back-end: nothing to estimate")
         return
-    from minorminer.busclique import find_clique_embedding
     per_N = {}
     for N in sorted({u[3] for u in todo}):
-        emb = find_clique_embedding(N, qa.sampler.target_graph, use_cache=True)
-        n_qubits = sum(len(chain) for chain in emb.values())
-        per_N[N] = solver.estimate_qpu_access_time(n_qubits, num_reads=cfg.num_reads,
-                                                   annealing_time=cfg.annealing_time) / 1e6
-        log(f"[anneal]   N={N:4d}: {n_qubits:5d} qubits, ~{per_N[N] * 1e3:.0f} ms per call")
+        per_N[N] = be.estimate_access_time(N)
+        if per_N[N] is None:
+            log("[anneal] the solver exposes no timing model")
+            return
+        log(f"[anneal]   N={N:4d}: ~{per_N[N] * 1e3:.0f} ms per call")
     total = sum(per_N[u[3]] for u in todo)
     log(f"[anneal] estimated QPU access time for the {len(todo)} remaining calls: {total:.1f} s")
 
@@ -343,10 +387,11 @@ def collect(out: Path, cfg: CampaignConfig) -> list[dict]:
             ref_source = ["exact" if c["ref_exact"] else "classical"] * len(ref)
             for s, recs in ann.items():                       # the annealer may beat the reference
                 for b, r in enumerate(recs):
-                    if r is not None and r["best_reward"] > ref[b] + TOL * max(1, abs(ref[b])):
+                    best = max(r["best_reward"], r.get("polished_best_reward", -INF)) if r is not None else -INF
+                    if best > ref[b] + TOL * max(1, abs(ref[b])):
                         if c["ref_exact"]:
                             raise AssertionError(f"{s} beat the exact optimum: {key} N={N} i={b}")
-                        ref[b], ref_source[b] = r["best_reward"], s
+                        ref[b], ref_source[b] = best, s
             base = {"problem": key, "eps": eps, "J0": J0, "N": N, "ref_exact": c["ref_exact"],
                     "ref_mean": float(ref.mean()), "ref_from_annealer": sum(x not in ("exact", "classical")
                                                                             for x in ref_source)}
@@ -369,7 +414,21 @@ def collect(out: Path, cfg: CampaignConfig) -> list[dict]:
                 t_read = np.median([_time_per_read(r) for b, r in done])
                 acc = [r["info"].get("timing_us", {}).get("qpu_access_time", np.nan) / 1e6 for b, r in done]
                 cbf = [r["info"].get("chain_break_fraction_mean", np.nan) for b, r in done]
-                rows.append(dict(base, kind="anneal", method=f"anneal_{s}", regime="", n_done=len(done),
+                extra = {}
+                if all("polished_rewards" in r for b, r in done):
+                    pp = np.array([np.sum(np.array(r["polished_counts"])[_success(r["polished_rewards"], ref[b])])
+                                   / np.sum(r["polished_counts"]) for b, r in done])
+                    extra.update(p_success_polished=float(np.median(pp)),
+                                 residual_polished=float(np.median([(ref[b] - r["polished_best_reward"]) / abs(ref[b])
+                                                                    for b, r in done])))
+                emb = [r["info"].get("embedding") for b, r in done]
+                if all(emb):
+                    extra.update(chain_len_mean=float(np.mean([e["chain_len_mean"] for e in emb])),
+                                 chain_len_max=int(max(e["chain_len_max"] for e in emb)),
+                                 n_qubits=int(np.mean([e["n_qubits"] for e in emb])),
+                                 chain_strength=_nan_to_none(float(np.mean([r["info"].get("chain_strength") or np.nan
+                                                                            for b, r in done]))))
+                rows.append(dict(base, kind="anneal", method=f"anneal_{s}", regime="", n_done=len(done), **extra,
                                  p_success_median=float(np.median(p)), p_success_mean=float(p.mean()),
                                  p_best_found=float(np.mean(best_res <= TOL)),
                                  residual_median=float(np.median(best_res)), residual_mean_read=float(np.median(mean_res)),
@@ -489,6 +548,67 @@ def plot_summary(out: Path, rows: list[dict], show: bool = False) -> list[Path]:
     return paths
 
 
+def compare_backends(rows: list[dict]) -> list[dict]:
+    """Per (problem class, N) where at least two annealing back-ends ran: who is better.
+    Winner = higher median success probability per read; ties -> lower median residual."""
+    ann = [r for r in rows if r["kind"] == "anneal"]
+    out = []
+    for device in ("qpu", "sim"):                      # rank QPU against QPU, simulator against simulator
+        for key in dict.fromkeys(r["problem"] for r in ann):
+            for N in sorted({r["N"] for r in ann if r["problem"] == key}):
+                pts = [r for r in ann if r["problem"] == key and r["N"] == N
+                       and r["method"].startswith(f"anneal_{device}_")]
+                if len(pts) < 2:
+                    continue
+                best = max(pts, key=lambda r: (r["p_success_median"], -r["residual_median"]))
+                tie = sum((r["p_success_median"], r["residual_median"]) == (best["p_success_median"], best["residual_median"])
+                          for r in pts) > 1
+                row = {"device": device, "problem": key, "N": N,
+                       "winner": "tie" if tie else best["method"].removeprefix("anneal_")}
+                for r in pts:
+                    m = r["method"].removeprefix("anneal_")
+                    for k in ("p_success_median", "p_success_polished", "residual_median", "tts99",
+                              "chain_break_fraction", "chain_len_mean", "chain_strength"):
+                        if k in r:
+                            row[f"{m}:{k}"] = r[k]
+                out.append(row)
+    return out
+
+
+def plot_backend_comparison(out: Path, comp: list[dict], rows: list[dict], show=False):
+    import matplotlib
+    if not show:
+        matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    ann = [r for r in rows if r["kind"] == "anneal"]
+    methods = list(dict.fromkeys(r["method"] for r in ann))
+    keys = list(dict.fromkeys(r["problem"] for r in ann))
+    panels = [("p_success_median", "success probability per read"), ("residual_median", "residual of best read"),
+              ("chain_break_fraction", "chain-break fraction"), ("chain_len_mean", "mean chain length")]
+    fig, axes = plt.subplots(len(panels), len(keys), figsize=(3.8 * len(keys), 2.8 * len(panels)), squeeze=False)
+    for j, key in enumerate(keys):
+        for i, (metric, lab) in enumerate(panels):
+            ax = axes[i, j]
+            for m in methods:
+                pts = sorted((r["N"], r.get(metric)) for r in ann if r["method"] == m and r["problem"] == key
+                             and r.get(metric) is not None)
+                if pts:
+                    x, y = np.array(pts, float).T
+                    ax.plot(x, y, "o-", ms=3, label=m.removeprefix("anneal_"))
+            if i == 0:
+                ax.set_title(key)
+            if j == 0:
+                ax.set_ylabel(lab)
+            if i == len(panels) - 1:
+                ax.set_xlabel("N")
+    axes[0, -1].legend(fontsize=7)
+    fig.tight_layout()
+    path = out / "summary" / "backend_comparison.png"
+    fig.savefig(path, dpi=130)
+    plt.close(fig) if not show else plt.show()
+    return path
+
+
 def stage_analyze(out: Path, cfg: CampaignConfig, log=print, show=False) -> list[dict]:
     rows = collect(out, cfg)
     if not rows:
@@ -496,6 +616,22 @@ def stage_analyze(out: Path, cfg: CampaignConfig, log=print, show=False) -> list
         return rows
     path = write_summary(out, rows)
     figs = plot_summary(out, rows, show=show)
+    comp = compare_backends(rows)
+    if comp:
+        cpath = out / "summary" / "backend_comparison.csv"
+        cols = []
+        for r in comp:
+            cols += [k for k in r if k not in cols]
+        with open(cpath, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=cols)
+            w.writeheader()
+            w.writerows(comp)
+        figs.append(plot_backend_comparison(out, comp, rows, show=show))
+        wins = {}
+        for r in comp:
+            wins[r["winner"]] = wins.get(r["winner"], 0) + 1
+        log(f"[analyze] back-end comparison -> {cpath}")
+        log("[analyze] points won (problem class x N): " + ", ".join(f"{k}: {v}" for k, v in sorted(wins.items())))
     log(f"[analyze] {len(rows)} rows -> {path}")
     for f in figs:
         log(f"[analyze] figure {f}")
@@ -516,16 +652,20 @@ def describe_plan(out: Path, cfg: CampaignConfig, log=print) -> None:
     log("  classical tasks (Slurm array index -> problem class):")
     for i, (key, *_rest) in enumerate(classes):
         log(f"    --task {i}: {key}")
+    qpu = [b for b in cfg.backends if b.startswith("qpu:")]
+    log(f"  annealing back-ends: {cfg.backends}  (chain strength prefactor {cfg.chain_strength_prefactor}, "
+        f"chain breaks: {cfg.chain_break_method}, polish: {cfg.polish})")
     n_call = len(cfg.Ns) * len(classes) * cfg.n_instances
     # t_call ~ t_programming + num_reads (t_anneal + t_readout + t_delay), Advantage typical values
     t_prog, t_ro, t_d = 15e-3, 100e-6, 20e-6
     t_read = cfg.annealing_time * 1e-6 + t_ro + t_d
     t_call = t_prog + cfg.num_reads * t_read
-    log(f"  annealer calls: |Ns| * classes * instances = {len(cfg.Ns)} * {len(classes)} * {cfg.n_instances} = {n_call}")
+    log(f"  annealer calls per back-end: |Ns| * classes * instances = {len(cfg.Ns)} * {len(classes)} * "
+        f"{cfg.n_instances} = {n_call}; QPU back-ends: {len(qpu)} -> {n_call * len(qpu)} calls")
     log(f"  QPU time per call ~ {t_prog * 1e3:.0f} ms + {cfg.num_reads} * ({cfg.annealing_time:g} + "
         f"{t_ro * 1e6:.0f} + {t_d * 1e6:.0f}) us = {t_call * 1e3:.0f} ms")
-    log(f"  QPU access time ~ {n_call} * {t_call:.3f} s = {n_call * t_call:.0f} s  "
-        f"(upper bound; `qpu --check` gives the solver's own estimate)")
+    log(f"  QPU access time ~ {len(qpu)} * {n_call} * {t_call:.3f} s = {len(qpu) * n_call * t_call:.0f} s  "
+        f"(upper bound; `qpu --check` gives each solver's own estimate)")
 
 
 # ================================================================================ cli ====
@@ -553,22 +693,29 @@ def main(argv=None) -> None:
     p.add_argument("--n-instances", type=int)
     p.add_argument("--num-reads", type=int)
     p.add_argument("--annealing-time", type=float)
-    p.add_argument("--chain-strength", type=float)
+    p.add_argument("--backends", nargs="+", help="annealing back-ends, e.g. qpu:zephyr:clique qpu:pegasus:clique")
+    p.add_argument("--chain-strength-prefactor", type=float, help="x uniform torque compensation (default 1.414)")
+    p.add_argument("--chain-break-method", choices=["majority_vote", "minimize_energy", "weighted_random", "discard"])
     p.add_argument("--force", action="store_true", help="overwrite an existing config.json")
     sub.add_parser("plan", parents=[common], help="print sizes, tasks and the QPU budget")
+    sub.add_parser("instances", parents=[common], help="write every instance J now (no internet, seconds)")
     p = sub.add_parser("classical", parents=[common], help="references, classical solvers and the game")
     p.add_argument("--task", type=int, default=os.environ.get("SLURM_ARRAY_TASK_ID") and
                    int(os.environ["SLURM_ARRAY_TASK_ID"]), help="problem-class index (default: Slurm array id)")
     p.add_argument("--problem", nargs="+", help="problem-class keys (see `plan`)")
-    for name, hlp in [("qpu", "D-Wave QPU (needs a Leap token and outbound HTTPS)"),
-                      ("sim", "classical simulated-annealing stand-in (no token)")]:
+    for name, hlp in [("qpu", "every qpu:* back-end of the config (needs a Leap token and outbound HTTPS)"),
+                      ("sim", "classical simulated-annealing stand-in, default sim:logical (no token)")]:
         p = sub.add_parser(name, parents=[common], help=f"annealer stage: {hlp}")
+        p.add_argument("--backend", nargs="+", help="back-end spec(s), e.g. qpu:zephyr:clique or sim:pegasus:clique")
         p.add_argument("--problem", nargs="+")
-        p.add_argument("--max-calls", type=int, help="stop after this many sampler calls")
+        p.add_argument("--max-calls", type=int, help="stop after this many sampler calls (per back-end)")
+        p.add_argument("--solver", help="pin a QPU by name, e.g. Advantage2_system1.4 (only with one --backend)")
         if name == "qpu":
-            p.add_argument("--solver", help="QPU name, e.g. Advantage_system4.1 (default: Leap's choice)")
             p.add_argument("--check", action="store_true",
                            help="connect, print solver and clique size, estimate QPU time; spends nothing")
+    p = sub.add_parser("embed", parents=[common], help="compute and cache embeddings, print chain statistics")
+    p.add_argument("--backend", nargs="+", help="default: every back-end of the config (qpu ones need the token)")
+    p.add_argument("--solver")
     p = sub.add_parser("analyze", parents=[common], help="summary.csv and figures")
     a = ap.parse_args(argv)
 
@@ -579,19 +726,37 @@ def main(argv=None) -> None:
             print(f"{out}/config.json exists (preset '{cfg.preset}'); use --force to replace it")
         else:
             cfg = make_config(a.preset, Ns=a.Ns, regimes=a.regimes, n_instances=a.n_instances,
-                              num_reads=a.num_reads, annealing_time=a.annealing_time, chain_strength=a.chain_strength)
+                              num_reads=a.num_reads, annealing_time=a.annealing_time, backends=a.backends,
+                              chain_strength_prefactor=a.chain_strength_prefactor,
+                              chain_break_method=a.chain_break_method)
             regimes_by_name(cfg.regimes)
+            from skgame.optim.backends import parse_spec
+            for spec in cfg.backends:
+                parse_spec(spec)
             save_config(out, cfg)
         describe_plan(out, cfg)
         return
     cfg = load_config(out)
     if a.cmd == "plan":
         describe_plan(out, cfg)
+    elif a.cmd == "instances":
+        for key, eps, J0 in _classes(cfg):
+            for N in cfg.Ns:
+                ensure_instances(out, cfg, key, eps, J0, N)
+        print(f"instances in {out / 'instances'}")
     elif a.cmd == "classical":
         stage_classical(out, cfg, _task_keys(cfg, a.task, a.problem))
     elif a.cmd in ("qpu", "sim"):
-        stage_anneal(out, cfg, a.cmd, keys=a.problem, max_calls=a.max_calls,
-                     solver_name=getattr(a, "solver", None), check_only=getattr(a, "check", False))
+        specs = a.backend or ([b for b in cfg.backends if b.startswith("qpu:")] if a.cmd == "qpu" else ["sim:logical"])
+        if any(not sp.startswith(a.cmd + ":") for sp in specs):
+            sys.exit(f"`{a.cmd}` runs {a.cmd}:* back-ends only, got {specs}")
+        if a.solver and len(specs) > 1:
+            sys.exit("--solver pins one QPU: pass a single --backend with it")
+        for spec in specs:
+            stage_anneal(out, cfg, spec, keys=a.problem, max_calls=a.max_calls, solver_name=a.solver,
+                         check_only=getattr(a, "check", False))
+    elif a.cmd == "embed":
+        stage_embed(out, cfg, a.backend or cfg.backends, solver_name=a.solver)
     elif a.cmd == "analyze":
         stage_analyze(out, cfg)
 

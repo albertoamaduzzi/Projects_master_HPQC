@@ -1,0 +1,4 @@
+# Only to execute main_simulation.ipynb headless (cineca/job_notebook.sbatch)
+nbformat
+nbconvert
+ipykernel

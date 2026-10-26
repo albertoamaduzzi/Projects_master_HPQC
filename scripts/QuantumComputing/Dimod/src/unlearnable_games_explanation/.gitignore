@@ -3,3 +3,4 @@ logs/
 .numba_cache/
 *.tmp*
 __pycache__/
+skgame_wheelhouse_py*

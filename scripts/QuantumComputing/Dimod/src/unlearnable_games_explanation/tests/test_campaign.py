@@ -49,9 +49,9 @@ def test_campaign_stages_end_to_end(tmp_path):
     ms.main(["classical", "--out", str(out)])                       # resume: nothing recomputed
     assert ms.classical_path(out, "eps0_J03", 8).stat().st_mtime_ns == first
     ms.main(["sim", "--out", str(out), "--max-calls", "3"])
-    assert len(list((out / "anneal" / "sim").rglob("*.json"))) == 3
+    assert len(list((out / "anneal" / "sim_logical").rglob("*.json"))) == 3
     ms.main(["sim", "--out", str(out)])
-    assert len(list((out / "anneal" / "sim").rglob("*.json"))) == 2 * 4 * 2
+    assert len(list((out / "anneal" / "sim_logical").rglob("*.json"))) == 2 * 4 * 2
     ms.main(["analyze", "--out", str(out)])
     rows = ms.collect(out, ms.load_config(out))
     kinds = {r["kind"] for r in rows}
@@ -64,3 +64,32 @@ def test_campaign_stages_end_to_end(tmp_path):
     assert (out / "summary" / "summary.csv").exists()
     cfg = json.loads((out / "config.json").read_text())
     assert cfg["Ns"] == [8, 12]
+
+
+def test_zephyr_and_pegasus_qpu_backends_compared(tmp_path, monkeypatch):
+    """The two QPU back-ends end to end against D-Wave's mock QPU (no token)."""
+    import dwave.system
+    from dwave.system.testing import MockDWaveSampler
+
+    def fake(solver=None, **kw):
+        topo = solver["topology__type"]
+        return MockDWaveSampler(topology_type=topo, topology_shape=[3, 4] if topo == "zephyr" else [4])
+
+    monkeypatch.setattr(dwave.system, "DWaveSampler", fake)
+    out = tmp_path / "q"
+    ms.main(["init", "--out", str(out), "--Ns", "8,12", "--n-instances", "1", "--regimes", "sg_satisficing",
+             "--chain-break-method", "minimize_energy"])
+    ms.main(["classical", "--out", str(out)])
+    ms.main(["qpu", "--out", str(out)])
+    for label in ("qpu_zephyr_clique", "qpu_pegasus_clique"):
+        files = sorted((out / "anneal" / label).rglob("*.json"))
+        assert len(files) == 2
+        r = json.loads(files[-1].read_text())
+        assert r["info"]["embedding"]["n_qubits"] >= 12
+        assert r["info"]["settings"]["chain_break_method"] == "minimize_energy"
+        assert r["polished_best_reward"] >= r["best_reward"] - 1e-12
+    rows = ms.stage_analyze(out, ms.load_config(out), log=lambda *a: None)
+    comp = ms.compare_backends(rows)
+    assert {c["N"] for c in comp} == {8, 12}
+    assert all(c["device"] == "qpu" for c in comp)
+    assert (out / "summary" / "backend_comparison.csv").exists()
