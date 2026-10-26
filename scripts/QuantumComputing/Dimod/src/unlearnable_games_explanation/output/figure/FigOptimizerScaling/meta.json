@@ -1,0 +1,16 @@
+{
+  "class": "FigOptimizerScaling",
+  "kind": "figure",
+  "paper_ref": "Planner study (Eq. 13, fn. 58)",
+  "hash": "67079b8c5142",
+  "params": {},
+  "deps": {
+    "PlannerBenchmark": "39e0292ce602"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.9230523109436035,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:24"
+}

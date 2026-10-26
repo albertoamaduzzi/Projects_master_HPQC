@@ -1,0 +1,17 @@
+{
+  "class": "Fig03Autocorrelation",
+  "kind": "figure",
+  "paper_ref": "Fig. 3",
+  "hash": "537c88713d7d",
+  "params": {},
+  "deps": {
+    "AutocorrAlpha1": "bfd9f6803e6b",
+    "DMFTAlpha1": "68d350e47c93"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.7292215824127197,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:12"
+}

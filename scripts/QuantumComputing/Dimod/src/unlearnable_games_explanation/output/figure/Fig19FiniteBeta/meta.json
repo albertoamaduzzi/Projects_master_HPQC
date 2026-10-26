@@ -1,0 +1,17 @@
+{
+  "class": "Fig19FiniteBeta",
+  "kind": "figure",
+  "paper_ref": "Fig. 19",
+  "hash": "d00e60d541d7",
+  "params": {},
+  "deps": {
+    "FiniteBetaTrajectories": "54c639837b52",
+    "DMFTFiniteBeta": "534a80087be8"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 2.3227133750915527,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:24"
+}

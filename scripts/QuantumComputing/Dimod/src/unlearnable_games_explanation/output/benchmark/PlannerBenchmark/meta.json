@@ -1,0 +1,34 @@
+{
+  "class": "PlannerBenchmark",
+  "kind": "benchmark",
+  "paper_ref": "Eq. 13, footnote [58]-[59]; Sec. IX A (omniscient planner)",
+  "hash": "39e0292ce602",
+  "params": {
+    "Ns": [
+      8,
+      12,
+      16,
+      20,
+      24,
+      32,
+      48,
+      64,
+      96,
+      128
+    ],
+    "eps": 0.0,
+    "n_instances": 3,
+    "n_runs": 3,
+    "n_exact": 24,
+    "budget": "quick",
+    "ref_sweeps": 2000,
+    "ref_restarts": 2
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 15.165616750717163,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:09"
+}

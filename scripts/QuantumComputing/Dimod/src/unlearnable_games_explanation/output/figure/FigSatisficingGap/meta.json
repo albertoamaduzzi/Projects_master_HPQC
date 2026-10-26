@@ -1,0 +1,18 @@
+{
+  "class": "FigSatisficingGap",
+  "kind": "figure",
+  "paper_ref": "Sec. III A, IX A",
+  "hash": "cac0388f93c9",
+  "params": {},
+  "deps": {
+    "RewardScanN": "a4f609fab4a6",
+    "PlannerBenchmark": "39e0292ce602",
+    "AnalyticCurves": "d3f484e7e819"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.3258841037750244,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:25"
+}

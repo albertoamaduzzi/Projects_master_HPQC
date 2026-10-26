@@ -1,0 +1,29 @@
+{
+  "class": "RewardScanN",
+  "kind": "data",
+  "paper_ref": "Fig. 2(d)",
+  "hash": "a4f609fab4a6",
+  "params": {
+    "Ns": [
+      32,
+      64,
+      128,
+      256
+    ],
+    "R": 8,
+    "alpha": 0.01,
+    "eps": [
+      0.0,
+      0.6
+    ],
+    "t_alpha": 60,
+    "window_alpha": 4
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 3.5001792907714844,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:38:40"
+}

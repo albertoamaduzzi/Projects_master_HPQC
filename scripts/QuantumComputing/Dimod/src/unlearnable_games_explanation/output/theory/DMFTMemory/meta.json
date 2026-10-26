@@ -1,0 +1,41 @@
+{
+  "class": "DMFTMemory",
+  "kind": "theory",
+  "paper_ref": "Eq. 30, Figs. 13, 14, 15",
+  "hash": "a66ae123fde8",
+  "params": {
+    "alphas": [
+      1.0,
+      0.3,
+      0.1
+    ],
+    "eps": [
+      0.6,
+      0.7,
+      0.8,
+      0.9,
+      1.0
+    ],
+    "T_per_alpha": 14,
+    "M": 6000,
+    "n_iter": 14,
+    "alphas_eps1": [
+      1.0,
+      0.3,
+      0.1
+    ],
+    "eps_cycles": 1.5,
+    "alphas_cycles": [
+      0.5,
+      0.2,
+      0.1
+    ]
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 19.934310913085938,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:38:02"
+}

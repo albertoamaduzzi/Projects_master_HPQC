@@ -1,0 +1,23 @@
+{
+  "class": "RewardTrajectories",
+  "kind": "data",
+  "paper_ref": "Fig. 5",
+  "hash": "cc224b4db13d",
+  "params": {
+    "N": 256,
+    "alpha": 0.01,
+    "eps": [
+      0.0,
+      0.6
+    ],
+    "alpha_t_max": 100.0,
+    "n_times": 60
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.22993230819702148,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:39:05"
+}

@@ -1,0 +1,39 @@
+{
+  "class": "MemoryCorrelation",
+  "kind": "data",
+  "paper_ref": "Fig. 13",
+  "hash": "ebd9ef668afa",
+  "params": {
+    "Ns": [
+      128,
+      256
+    ],
+    "R": 8,
+    "alphas": [
+      1.0,
+      0.3,
+      0.1
+    ],
+    "eps": [
+      0.6,
+      0.7,
+      0.8,
+      0.9,
+      1.0
+    ],
+    "t_alpha": 300,
+    "window_alpha": 10,
+    "traj_alphas": [
+      1.0,
+      0.1
+    ],
+    "traj_N": 128
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 5.658089876174927,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:39:50"
+}

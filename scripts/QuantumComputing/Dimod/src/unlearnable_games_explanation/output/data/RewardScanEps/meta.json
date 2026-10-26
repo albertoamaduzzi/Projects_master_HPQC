@@ -1,0 +1,36 @@
+{
+  "class": "RewardScanEps",
+  "kind": "data",
+  "paper_ref": "Fig. 2(b)",
+  "hash": "9f35f10e5541",
+  "params": {
+    "N": 128,
+    "R": 8,
+    "alphas": [
+      0.01,
+      0.1
+    ],
+    "eps": [
+      0.0,
+      0.2,
+      0.4,
+      0.6,
+      0.8,
+      1.0,
+      1.2,
+      1.4,
+      1.6,
+      1.8,
+      2.0
+    ],
+    "t_alpha": 60,
+    "window_alpha": 4
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 2.399509906768799,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:38:30"
+}

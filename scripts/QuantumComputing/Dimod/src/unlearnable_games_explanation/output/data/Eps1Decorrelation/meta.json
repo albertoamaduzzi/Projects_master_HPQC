@@ -1,0 +1,27 @@
+{
+  "class": "Eps1Decorrelation",
+  "kind": "data",
+  "paper_ref": "Fig. 14",
+  "hash": "9eadedfd41af",
+  "params": {
+    "Ns": [
+      512
+    ],
+    "R": 8,
+    "alphas": [
+      1.0,
+      0.3,
+      0.1,
+      0.03
+    ],
+    "t_alpha": 60,
+    "max_alpha_tau": 8
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 4.394493579864502,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:39:55"
+}

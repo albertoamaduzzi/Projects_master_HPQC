@@ -1,0 +1,17 @@
+{
+  "class": "Fig11C2vsEps",
+  "kind": "figure",
+  "paper_ref": "Fig. 11",
+  "hash": "7e5d55da185a",
+  "params": {},
+  "deps": {
+    "AutocorrAlpha1": "bfd9f6803e6b",
+    "DMFTAlpha1": "68d350e47c93"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.1897108554840088,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:16"
+}

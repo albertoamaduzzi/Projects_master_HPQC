@@ -1,0 +1,16 @@
+{
+  "class": "Fig05RewardTrajectories",
+  "kind": "figure",
+  "paper_ref": "Fig. 5",
+  "hash": "e429e1542ea9",
+  "params": {},
+  "deps": {
+    "RewardTrajectories": "cc224b4db13d"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.8669555187225342,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:13"
+}

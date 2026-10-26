@@ -1,0 +1,23 @@
+{
+  "class": "CycleComplexity",
+  "kind": "theory",
+  "paper_ref": "Eq. 25, Appendix B, Fig. 10",
+  "hash": "cf50a62286fb",
+  "params": {
+    "eps": [
+      0.0,
+      0.2,
+      0.4,
+      0.6
+    ],
+    "n_alpha": 120,
+    "alpha_min": 0.02
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 16.046319246292114,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:37:28"
+}

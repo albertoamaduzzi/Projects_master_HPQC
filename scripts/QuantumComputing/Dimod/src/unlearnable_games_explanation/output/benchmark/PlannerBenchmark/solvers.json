@@ -1,0 +1,54 @@
+[
+  {
+    "name": "exact",
+    "max_N": "24"
+  },
+  {
+    "name": "greedy",
+    "restarts": "20"
+  },
+  {
+    "name": "skgame_learning",
+    "alpha": "0.05",
+    "steps": "800",
+    "restarts": "2",
+    "beta0": "None"
+  },
+  {
+    "name": "sa",
+    "sweeps": "300",
+    "beta0": "0.1",
+    "beta1": "5.0",
+    "restarts": "2",
+    "n_betas": "100"
+  },
+  {
+    "name": "pt",
+    "sweeps": "300",
+    "n_replicas": "12",
+    "beta_min": "0.2",
+    "beta_max": "5.0"
+  },
+  {
+    "name": "tau_eo",
+    "steps_per_spin": "60",
+    "tau": "1.3",
+    "restarts": "1"
+  },
+  {
+    "name": "sdp_gw",
+    "rank": "None",
+    "iters": "60",
+    "roundings": "50"
+  },
+  {
+    "name": "dwave_sa",
+    "sample_kwargs": "{'num_reads': 4, 'num_sweeps': 300}",
+    "max_N": "None"
+  },
+  {
+    "name": "dwave_tabu",
+    "sample_kwargs": "{'num_reads': 2, 'timeout': 20}",
+    "max_N": "None"
+  }
+]

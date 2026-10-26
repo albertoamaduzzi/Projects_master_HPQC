@@ -1,0 +1,18 @@
+{
+  "class": "Fig17OrderParameter",
+  "kind": "figure",
+  "paper_ref": "Fig. 17",
+  "hash": "9f6cc4a9c132",
+  "params": {},
+  "deps": {
+    "QvsTemperature": "c1f8b8432b06",
+    "StaticDMFTSolution": "e469250c82e9",
+    "DMFTFiniteBeta": "534a80087be8"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.3557114601135254,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:20"
+}

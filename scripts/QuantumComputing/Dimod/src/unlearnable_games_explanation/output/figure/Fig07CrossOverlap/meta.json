@@ -1,0 +1,16 @@
+{
+  "class": "Fig07CrossOverlap",
+  "kind": "figure",
+  "paper_ref": "Fig. 7",
+  "hash": "10f390d04995",
+  "params": {},
+  "deps": {
+    "CrossOverlap": "c5a2f6276fb3"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.5747849941253662,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:15"
+}

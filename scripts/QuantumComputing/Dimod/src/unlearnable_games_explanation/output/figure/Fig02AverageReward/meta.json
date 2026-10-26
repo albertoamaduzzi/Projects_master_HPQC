@@ -1,0 +1,20 @@
+{
+  "class": "Fig02AverageReward",
+  "kind": "figure",
+  "paper_ref": "Fig. 2",
+  "hash": "c3e88fcdb4b5",
+  "params": {},
+  "deps": {
+    "RewardScanAlpha": "3794c6e34250",
+    "RewardScanEps": "9f35f10e5541",
+    "RewardScanNoise": "c578f5c1590d",
+    "RewardScanN": "a4f609fab4a6",
+    "AnalyticCurves": "d3f484e7e819"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.8876831531524658,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:11"
+}

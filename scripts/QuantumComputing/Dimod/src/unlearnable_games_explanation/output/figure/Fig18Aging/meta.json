@@ -1,0 +1,16 @@
+{
+  "class": "Fig18Aging",
+  "kind": "figure",
+  "paper_ref": "Fig. 18",
+  "hash": "28e9c5861949",
+  "params": {},
+  "deps": {
+    "Aging": "a7ca93bf5df3"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 1.235560655593872,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:21"
+}

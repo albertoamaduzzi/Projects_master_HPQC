@@ -1,0 +1,16 @@
+{
+  "class": "AnalyticCurves",
+  "kind": "theory",
+  "paper_ref": "Eqs. 9, 10, 13, 20, 22, 37-39",
+  "hash": "d3f484e7e819",
+  "params": {
+    "n_eps": 201
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.1755979061126709,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:36:58"
+}

@@ -1,0 +1,37 @@
+{
+  "class": "RewardScanNoise",
+  "kind": "data",
+  "paper_ref": "Fig. 2(c)",
+  "hash": "c578f5c1590d",
+  "params": {
+    "N": 128,
+    "R": 8,
+    "alpha": 0.01,
+    "eps": [
+      0.0,
+      0.6
+    ],
+    "T": [
+      0.0,
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9,
+      1.0
+    ],
+    "t_alpha": 60,
+    "window_alpha": 4
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 6.192321538925171,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:38:36"
+}

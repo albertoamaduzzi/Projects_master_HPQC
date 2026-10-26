@@ -1,0 +1,24 @@
+{
+  "class": "CrossOverlap",
+  "kind": "data",
+  "paper_ref": "Fig. 7",
+  "hash": "c5a2f6276fb3",
+  "params": {
+    "Ns": [
+      32,
+      64,
+      128,
+      256
+    ],
+    "n_dis": 32,
+    "alpha": 0.01,
+    "t_alpha": 80
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 16.724765300750732,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:39:21"
+}

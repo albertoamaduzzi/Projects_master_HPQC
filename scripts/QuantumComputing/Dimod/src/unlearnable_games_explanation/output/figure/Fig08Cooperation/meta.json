@@ -1,0 +1,16 @@
+{
+  "class": "Fig08Cooperation",
+  "kind": "figure",
+  "paper_ref": "Fig. 8",
+  "hash": "23e9384508c7",
+  "params": {},
+  "deps": {
+    "CooperationScan": "3b68a59c1a94"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.33178210258483887,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:15"
+}

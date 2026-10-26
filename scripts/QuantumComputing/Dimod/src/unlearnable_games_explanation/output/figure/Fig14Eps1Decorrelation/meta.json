@@ -1,0 +1,18 @@
+{
+  "class": "Fig14Eps1Decorrelation",
+  "kind": "figure",
+  "paper_ref": "Fig. 14",
+  "hash": "14f7a5c8af20",
+  "params": {},
+  "deps": {
+    "Eps1Decorrelation": "9eadedfd41af",
+    "DMFTMemory": "a66ae123fde8",
+    "AnalyticCurves": "d3f484e7e819"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.5071620941162109,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:18"
+}

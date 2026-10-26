@@ -1,0 +1,17 @@
+{
+  "class": "Fig16QHeatmap",
+  "kind": "figure",
+  "paper_ref": "Fig. 16",
+  "hash": "0670332991ad",
+  "params": {},
+  "deps": {
+    "QHeatmap": "b77359d1e9e9",
+    "AnalyticCurves": "d3f484e7e819"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.4020051956176758,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:20"
+}

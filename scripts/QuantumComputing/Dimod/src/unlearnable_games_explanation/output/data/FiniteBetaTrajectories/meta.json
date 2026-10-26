@@ -1,0 +1,30 @@
+{
+  "class": "FiniteBetaTrajectories",
+  "kind": "data",
+  "paper_ref": "Fig. 19",
+  "hash": "54c639837b52",
+  "params": {
+    "N": 256,
+    "R": 6,
+    "alpha": 0.1,
+    "betas": [
+      4.0,
+      2.0
+    ],
+    "eps": [
+      0.1,
+      0.85,
+      1.05,
+      1.5
+    ],
+    "t0": 3000,
+    "window_alpha": 30
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 5.686730623245239,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:41:54"
+}

@@ -1,0 +1,17 @@
+{
+  "class": "Fig09Complexity",
+  "kind": "figure",
+  "paper_ref": "Fig. 9",
+  "hash": "bd4d09520bd7",
+  "params": {},
+  "deps": {
+    "FixedPointCounts": "96ba1c98dc9e",
+    "AnalyticCurves": "d3f484e7e819"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.5276587009429932,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:16"
+}

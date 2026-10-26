@@ -1,0 +1,16 @@
+{
+  "class": "Fig10CycleComplexity",
+  "kind": "figure",
+  "paper_ref": "Fig. 10",
+  "hash": "93ca8a27a831",
+  "params": {},
+  "deps": {
+    "CycleComplexity": "cf50a62286fb"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.313002347946167,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:16"
+}

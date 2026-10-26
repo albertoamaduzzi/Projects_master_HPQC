@@ -1,0 +1,40 @@
+{
+  "class": "PhaseClassification",
+  "kind": "data",
+  "paper_ref": "Fig. 1 (numerical counterpart)",
+  "hash": "a7722601fa01",
+  "params": {
+    "N": 64,
+    "R": 8,
+    "alphas": [
+      1.0,
+      0.8,
+      0.6,
+      0.4,
+      0.2,
+      0.1
+    ],
+    "eps": [
+      0.0,
+      0.2,
+      0.4,
+      0.6,
+      0.8,
+      1.0,
+      1.2,
+      1.4,
+      1.6,
+      1.8,
+      2.0
+    ],
+    "t_alpha": 300,
+    "window": 64
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 1.1767876148223877,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:38:23"
+}

@@ -1,0 +1,39 @@
+{
+  "class": "CooperationScan",
+  "kind": "data",
+  "paper_ref": "Fig. 8",
+  "hash": "3b68a59c1a94",
+  "params": {
+    "N": 128,
+    "R": 4,
+    "alpha": 0.01,
+    "J0": [
+      0.0,
+      0.25,
+      0.5,
+      0.75,
+      1.0,
+      1.25,
+      1.5,
+      1.75,
+      2.0
+    ],
+    "eps": [
+      0,
+      0.6,
+      0.85,
+      1.05,
+      1.5,
+      2.0
+    ],
+    "t_alpha": 50,
+    "window_alpha": 4
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 5.279407262802124,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:39:27"
+}

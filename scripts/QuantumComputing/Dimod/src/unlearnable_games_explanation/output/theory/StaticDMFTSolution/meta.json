@@ -1,0 +1,17 @@
+{
+  "class": "StaticDMFTSolution",
+  "kind": "theory",
+  "paper_ref": "Eqs. 40-50, Fig. 17",
+  "hash": "e469250c82e9",
+  "params": {
+    "eps": 0.1,
+    "n_T": 40
+  },
+  "deps": {},
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 13.794949293136597,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:37:12"
+}

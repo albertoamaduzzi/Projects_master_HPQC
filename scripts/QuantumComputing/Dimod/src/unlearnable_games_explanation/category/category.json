@@ -1,0 +1,1810 @@
+{
+  "name": "SKGamePaper",
+  "monoidal_unit": "I",
+  "objects": [
+    {
+      "name": "SymbolicChecks",
+      "kind": "table",
+      "paper_ref": "Eqs. 9-10, 13, 18, 20, 22-23, 33, 37-39, 49-50, B37, B50",
+      "module": "skgame.outputs.theory",
+      "description": "SymPy verification of every closed-form step (incl. two corrected typos)."
+    },
+    {
+      "name": "AnalyticCurves",
+      "kind": "theory",
+      "paper_ref": "Eqs. 9, 10, 13, 20, 22, 37-39",
+      "module": "skgame.outputs.theory",
+      "description": "ups(eps), eta(eps), R_inf(eps), T_c(eps), Sigma_FP(eps), Sompolinsky-Crisanti C(tau)."
+    },
+    {
+      "name": "StaticDMFTSolution",
+      "kind": "theory",
+      "paper_ref": "Eqs. 40-50, Fig. 17",
+      "module": "skgame.outputs.theory",
+      "description": "RS/static fixed point (q, chi) of the DMFT vs T/Tc and spectral density of perturbations."
+    },
+    {
+      "name": "CycleComplexity",
+      "kind": "theory",
+      "paper_ref": "Eq. 25, Appendix B, Fig. 10",
+      "module": "skgame.outputs.theory",
+      "description": "Annealed complexity Sigma_2(alpha, eps) of 2-cycles and 1-C(1) at the saddle."
+    },
+    {
+      "name": "DMFTAlpha1",
+      "kind": "theory",
+      "paper_ref": "Eq. 30, Figs. 3, 11",
+      "module": "skgame.outputs.theory",
+      "description": "Discrete DMFT at alpha=1, beta=inf: C(tau) for Fig. 3 and C(tau=2) vs eps for Fig. 11."
+    },
+    {
+      "name": "DMFTMemory",
+      "kind": "theory",
+      "paper_ref": "Eq. 30, Figs. 13, 14, 15",
+      "module": "skgame.outputs.theory",
+      "description": "Discrete DMFT with memory (alpha<1, beta=inf): C(2/alpha) vs eps, C(tau) at eps=1, cycle frequency."
+    },
+    {
+      "name": "DMFTFiniteBeta",
+      "kind": "theory",
+      "paper_ref": "Eq. 30-31, Figs. 17a, 19",
+      "module": "skgame.outputs.theory",
+      "description": "Discrete DMFT at finite beta (online noise): q vs T/Tc and C(tau) for Fig. 19."
+    },
+    {
+      "name": "PhaseClassification",
+      "kind": "data",
+      "paper_ref": "Fig. 1 (numerical counterpart)",
+      "module": "skgame.outputs.simulations",
+      "description": "Classify (eps, alpha) at beta=inf, finite N: fixed point / L-cycle / no recurrence."
+    },
+    {
+      "name": "RewardScanAlpha",
+      "kind": "data",
+      "paper_ref": "Fig. 2(a)",
+      "module": "skgame.outputs.simulations",
+      "description": "Average reward vs memory-loss rate alpha for several eps, beta=inf."
+    },
+    {
+      "name": "RewardScanEps",
+      "kind": "data",
+      "paper_ref": "Fig. 2(b)",
+      "module": "skgame.outputs.simulations",
+      "description": "Average reward vs asymmetry eps for alpha in {0.01, 0.1}, beta=inf."
+    },
+    {
+      "name": "RewardScanNoise",
+      "kind": "data",
+      "paper_ref": "Fig. 2(c)",
+      "module": "skgame.outputs.simulations",
+      "description": "Average reward vs noise 1/beta (alpha=0.01) for eps in {0, 0.6}: non-monotonic."
+    },
+    {
+      "name": "RewardScanN",
+      "kind": "data",
+      "paper_ref": "Fig. 2(d)",
+      "module": "skgame.outputs.simulations",
+      "description": "Average reward vs N (alpha=0.01, beta=inf), fit R_N = R_inf - A N^{-2/3}."
+    },
+    {
+      "name": "AutocorrAlpha1",
+      "kind": "data",
+      "paper_ref": "Figs. 3, 11",
+      "module": "skgame.outputs.simulations",
+      "description": "Stationary C(tau) at alpha=1, beta=inf (Fig. 3) and C(tau=2) vs eps for several N (Fig. 11)."
+    },
+    {
+      "name": "RewardDistributions",
+      "kind": "data",
+      "paper_ref": "Figs. 4, 6",
+      "module": "skgame.outputs.simulations",
+      "description": "Distribution of individual rewards e_i (late times) for alpha in {1,0.5,0.01} and several eps."
+    },
+    {
+      "name": "RewardTrajectories",
+      "kind": "data",
+      "paper_ref": "Fig. 5",
+      "module": "skgame.outputs.simulations",
+      "description": "Individual rewards e_i(t) on log-spaced times (alpha=0.01) for eps in {0, 0.6}."
+    },
+    {
+      "name": "CrossOverlap",
+      "kind": "data",
+      "paper_ref": "Fig. 7",
+      "module": "skgame.outputs.simulations",
+      "description": "Overlap C^x_N of final individual rewards for two initial conditions, same J (eps=0)."
+    },
+    {
+      "name": "CooperationScan",
+      "kind": "data",
+      "paper_ref": "Fig. 8",
+      "module": "skgame.outputs.simulations",
+      "description": "Average reward and magnetisation vs cooperative bias J0 (alpha=0.01, beta=inf)."
+    },
+    {
+      "name": "FixedPointCounts",
+      "kind": "data",
+      "paper_ref": "Fig. 9",
+      "module": "skgame.outputs.simulations",
+      "description": "Annealed complexity: exact T=0 enumeration vs eps; multistart NMFE counts on a (T, eps) grid."
+    },
+    {
+      "name": "FrozenVsAlpha",
+      "kind": "data",
+      "paper_ref": "Fig. 12",
+      "module": "skgame.outputs.simulations",
+      "description": "C(tau=1) vs alpha for eps<0.8 (memory freezes 2-cycles into fixed points) + sample trajectories."
+    },
+    {
+      "name": "MemoryCorrelation",
+      "kind": "data",
+      "paper_ref": "Fig. 13",
+      "module": "skgame.outputs.simulations",
+      "description": "C(tau=2/alpha) vs eps for several alpha and N (finite-size vs DMFT) + trajectories at eps=1."
+    },
+    {
+      "name": "Eps1Decorrelation",
+      "kind": "data",
+      "paper_ref": "Fig. 14",
+      "module": "skgame.outputs.simulations",
+      "description": "C(tau) at eps=1 for several alpha: collapse vs alpha*tau onto the Sompolinsky-Crisanti curve."
+    },
+    {
+      "name": "CyclePeriod",
+      "kind": "data",
+      "paper_ref": "Fig. 15",
+      "module": "skgame.outputs.simulations",
+      "description": "Quasi-cycle frequency omega_0 vs alpha for eps > 2 - eps_c (period ~ alpha^{-1/2})."
+    },
+    {
+      "name": "QHeatmap",
+      "kind": "data",
+      "paper_ref": "Fig. 16",
+      "module": "skgame.outputs.simulations",
+      "description": "q = C(0) on a (T, eps) grid for alpha in {0.5, 0.1, 0.01}."
+    },
+    {
+      "name": "QvsTemperature",
+      "kind": "data",
+      "paper_ref": "Fig. 17(a)",
+      "module": "skgame.outputs.simulations",
+      "description": "Stationary q vs T/T_c(eps) at eps=0.1 for alpha in {0.01, 0.1} (finite N)."
+    },
+    {
+      "name": "Aging",
+      "kind": "data",
+      "paper_ref": "Fig. 18",
+      "module": "skgame.outputs.simulations",
+      "description": "Two-time correlation C(t_w, t_w+t): t/t_w scaling (eps<eps*) vs TTI (eps>eps*)."
+    },
+    {
+      "name": "FiniteBetaTrajectories",
+      "kind": "data",
+      "paper_ref": "Fig. 19",
+      "module": "skgame.outputs.simulations",
+      "description": "Intentions m_i(t), their histogram and C(tau) at alpha=0.1 for beta in {4,2} and four eps."
+    },
+    {
+      "name": "PlannerBenchmark",
+      "kind": "benchmark",
+      "paper_ref": "Eq. 13, footnote [58]-[59]; Sec. IX A (omniscient planner)",
+      "module": "skgame.outputs.benchmark",
+      "description": "Ground-state search for the planner problem with many optimisers vs N: success, residual, TTS."
+    },
+    {
+      "name": "Fig01PhaseDiagram",
+      "kind": "figure",
+      "paper_ref": "Fig. 1",
+      "module": "skgame.outputs.figures",
+      "description": "Schematic (eps, alpha) phase diagrams (noiseless, weak noise) + numerical classification."
+    },
+    {
+      "name": "Fig02AverageReward",
+      "kind": "figure",
+      "paper_ref": "Fig. 2",
+      "module": "skgame.outputs.figures",
+      "description": "Average reward vs alpha, eps, noise 1/beta and N."
+    },
+    {
+      "name": "Fig03Autocorrelation",
+      "kind": "figure",
+      "paper_ref": "Fig. 3",
+      "module": "skgame.outputs.figures",
+      "description": "Steady-state C(tau) at alpha=1: L=2 cycles, weak chaos, strong chaos, L=4 cycles; sims vs DMFT."
+    },
+    {
+      "name": "Fig04RewardDistribution",
+      "kind": "figure",
+      "paper_ref": "Fig. 4",
+      "module": "skgame.outputs.figures",
+      "description": "rho(e_i) at the fixed points (eps=0) for three alpha; linear vanishing at e->0."
+    },
+    {
+      "name": "Fig05RewardTrajectories",
+      "kind": "figure",
+      "paper_ref": "Fig. 5",
+      "module": "skgame.outputs.figures",
+      "description": "Individual rewards e_i(t) on a log time axis, histograms at t=1 and final time."
+    },
+    {
+      "name": "Fig06RewardDistributionsEps",
+      "kind": "figure",
+      "paper_ref": "Fig. 6",
+      "module": "skgame.outputs.figures",
+      "description": "rho(e_i) for alpha in {1,0.5,0.01} across eps: negative tail grows with competition."
+    },
+    {
+      "name": "Fig07CrossOverlap",
+      "kind": "figure",
+      "paper_ref": "Fig. 7",
+      "module": "skgame.outputs.figures",
+      "description": "Overlap of final rewards between two initial conditions: distribution (N^{2/3} scaling) and mean ~ N^-0.85."
+    },
+    {
+      "name": "Fig08Cooperation",
+      "kind": "figure",
+      "paper_ref": "Fig. 8",
+      "module": "skgame.outputs.figures",
+      "description": "Reward and |M| vs cooperative incentive J0."
+    },
+    {
+      "name": "Fig09Complexity",
+      "kind": "figure",
+      "paper_ref": "Fig. 9",
+      "module": "skgame.outputs.figures",
+      "description": "Annealed complexity of NMFE fixed points: (T, eps) heat map and T=0 curve vs eps."
+    },
+    {
+      "name": "Fig10CycleComplexity",
+      "kind": "figure",
+      "paper_ref": "Fig. 10",
+      "module": "skgame.outputs.figures",
+      "description": "Sigma_2(alpha, eps) and 1-C(1) at the L=2 saddle: coalescence with the fixed-point saddle as alpha->0."
+    },
+    {
+      "name": "Fig11C2vsEps",
+      "kind": "figure",
+      "paper_ref": "Fig. 11",
+      "module": "skgame.outputs.figures",
+      "description": "C(tau=2) at alpha=1 vs eps for several N, against DMFT (N->inf first)."
+    },
+    {
+      "name": "Fig12FrozenVsAlpha",
+      "kind": "figure",
+      "paper_ref": "Fig. 12",
+      "module": "skgame.outputs.figures",
+      "description": "C(tau=1) vs alpha (eps<0.8): memory turns 2-cycles into fixed points; sample trajectories."
+    },
+    {
+      "name": "Fig13MemoryCorrelation",
+      "kind": "figure",
+      "paper_ref": "Fig. 13",
+      "module": "skgame.outputs.figures",
+      "description": "C(tau=2/alpha) vs eps for several alpha, N; DMFT lines; trajectories at eps=1."
+    },
+    {
+      "name": "Fig14Eps1Decorrelation",
+      "kind": "figure",
+      "paper_ref": "Fig. 14",
+      "module": "skgame.outputs.figures",
+      "description": "C(tau) at eps=1: collapse in alpha*tau onto the Sompolinsky-Crisanti solution, tau1=2.84."
+    },
+    {
+      "name": "Fig15CycleStretching",
+      "kind": "figure",
+      "paper_ref": "Fig. 15",
+      "module": "skgame.outputs.figures",
+      "description": "Anomalous stretching of cycles: 1/omega0 ~ alpha^{-1/2}; C vs sqrt(alpha) tau; power spectrum."
+    },
+    {
+      "name": "Fig16QHeatmap",
+      "kind": "figure",
+      "paper_ref": "Fig. 16",
+      "module": "skgame.outputs.figures",
+      "description": "q in the (eps, T) plane for alpha in {0.5, 0.1, 0.01} with T_c(eps)."
+    },
+    {
+      "name": "Fig17OrderParameter",
+      "kind": "figure",
+      "paper_ref": "Fig. 17",
+      "module": "skgame.outputs.figures",
+      "description": "q vs T/T_c: simulations, dynamical DMFT and the (incorrect) static RS solution; spectral instability."
+    },
+    {
+      "name": "Fig18Aging",
+      "kind": "figure",
+      "paper_ref": "Fig. 18",
+      "module": "skgame.outputs.figures",
+      "description": "Aging: C(t_w,t_w+t) vs t/t_w (eps small: collapse = simple aging); vs alpha t for eps=0.5 (TTI)."
+    },
+    {
+      "name": "Fig19FiniteBeta",
+      "kind": "figure",
+      "paper_ref": "Fig. 19",
+      "module": "skgame.outputs.figures",
+      "description": "Finite-beta trajectories m_i(t), their histogram and C(tau) (sims vs DMFT)."
+    },
+    {
+      "name": "FigOptimizerScaling",
+      "kind": "figure",
+      "paper_ref": "Planner study (Eq. 13, fn. 58)",
+      "module": "skgame.outputs.figures",
+      "description": "Per-solver success probability, residual and time-to-solution vs N; breakdown sizes."
+    },
+    {
+      "name": "FigSatisficingGap",
+      "kind": "figure",
+      "paper_ref": "Sec. III A, IX A",
+      "module": "skgame.outputs.figures",
+      "description": "Learning agents vs planner: R_N of SK-game learning vs best planner value vs Parisi, against N^{-2/3}."
+    }
+  ],
+  "generators": [
+    {
+      "name": "make_SymbolicChecks",
+      "dom": [],
+      "codom": "SymbolicChecks"
+    },
+    {
+      "name": "make_AnalyticCurves",
+      "dom": [],
+      "codom": "AnalyticCurves"
+    },
+    {
+      "name": "make_StaticDMFTSolution",
+      "dom": [],
+      "codom": "StaticDMFTSolution"
+    },
+    {
+      "name": "make_CycleComplexity",
+      "dom": [],
+      "codom": "CycleComplexity"
+    },
+    {
+      "name": "make_DMFTAlpha1",
+      "dom": [],
+      "codom": "DMFTAlpha1"
+    },
+    {
+      "name": "make_DMFTMemory",
+      "dom": [],
+      "codom": "DMFTMemory"
+    },
+    {
+      "name": "make_DMFTFiniteBeta",
+      "dom": [],
+      "codom": "DMFTFiniteBeta"
+    },
+    {
+      "name": "make_PhaseClassification",
+      "dom": [],
+      "codom": "PhaseClassification"
+    },
+    {
+      "name": "make_RewardScanAlpha",
+      "dom": [],
+      "codom": "RewardScanAlpha"
+    },
+    {
+      "name": "make_RewardScanEps",
+      "dom": [],
+      "codom": "RewardScanEps"
+    },
+    {
+      "name": "make_RewardScanNoise",
+      "dom": [],
+      "codom": "RewardScanNoise"
+    },
+    {
+      "name": "make_RewardScanN",
+      "dom": [],
+      "codom": "RewardScanN"
+    },
+    {
+      "name": "make_AutocorrAlpha1",
+      "dom": [],
+      "codom": "AutocorrAlpha1"
+    },
+    {
+      "name": "make_RewardDistributions",
+      "dom": [],
+      "codom": "RewardDistributions"
+    },
+    {
+      "name": "make_RewardTrajectories",
+      "dom": [],
+      "codom": "RewardTrajectories"
+    },
+    {
+      "name": "make_CrossOverlap",
+      "dom": [],
+      "codom": "CrossOverlap"
+    },
+    {
+      "name": "make_CooperationScan",
+      "dom": [],
+      "codom": "CooperationScan"
+    },
+    {
+      "name": "make_FixedPointCounts",
+      "dom": [],
+      "codom": "FixedPointCounts"
+    },
+    {
+      "name": "make_FrozenVsAlpha",
+      "dom": [],
+      "codom": "FrozenVsAlpha"
+    },
+    {
+      "name": "make_MemoryCorrelation",
+      "dom": [],
+      "codom": "MemoryCorrelation"
+    },
+    {
+      "name": "make_Eps1Decorrelation",
+      "dom": [],
+      "codom": "Eps1Decorrelation"
+    },
+    {
+      "name": "make_CyclePeriod",
+      "dom": [],
+      "codom": "CyclePeriod"
+    },
+    {
+      "name": "make_QHeatmap",
+      "dom": [],
+      "codom": "QHeatmap"
+    },
+    {
+      "name": "make_QvsTemperature",
+      "dom": [],
+      "codom": "QvsTemperature"
+    },
+    {
+      "name": "make_Aging",
+      "dom": [],
+      "codom": "Aging"
+    },
+    {
+      "name": "make_FiniteBetaTrajectories",
+      "dom": [],
+      "codom": "FiniteBetaTrajectories"
+    },
+    {
+      "name": "make_PlannerBenchmark",
+      "dom": [],
+      "codom": "PlannerBenchmark"
+    },
+    {
+      "name": "make_Fig01PhaseDiagram",
+      "dom": [
+        "PhaseClassification",
+        "AnalyticCurves"
+      ],
+      "codom": "Fig01PhaseDiagram"
+    },
+    {
+      "name": "make_Fig02AverageReward",
+      "dom": [
+        "RewardScanAlpha",
+        "RewardScanEps",
+        "RewardScanNoise",
+        "RewardScanN",
+        "AnalyticCurves"
+      ],
+      "codom": "Fig02AverageReward"
+    },
+    {
+      "name": "make_Fig03Autocorrelation",
+      "dom": [
+        "AutocorrAlpha1",
+        "DMFTAlpha1"
+      ],
+      "codom": "Fig03Autocorrelation"
+    },
+    {
+      "name": "make_Fig04RewardDistribution",
+      "dom": [
+        "RewardDistributions"
+      ],
+      "codom": "Fig04RewardDistribution"
+    },
+    {
+      "name": "make_Fig05RewardTrajectories",
+      "dom": [
+        "RewardTrajectories"
+      ],
+      "codom": "Fig05RewardTrajectories"
+    },
+    {
+      "name": "make_Fig06RewardDistributionsEps",
+      "dom": [
+        "RewardDistributions"
+      ],
+      "codom": "Fig06RewardDistributionsEps"
+    },
+    {
+      "name": "make_Fig07CrossOverlap",
+      "dom": [
+        "CrossOverlap"
+      ],
+      "codom": "Fig07CrossOverlap"
+    },
+    {
+      "name": "make_Fig08Cooperation",
+      "dom": [
+        "CooperationScan"
+      ],
+      "codom": "Fig08Cooperation"
+    },
+    {
+      "name": "make_Fig09Complexity",
+      "dom": [
+        "FixedPointCounts",
+        "AnalyticCurves"
+      ],
+      "codom": "Fig09Complexity"
+    },
+    {
+      "name": "make_Fig10CycleComplexity",
+      "dom": [
+        "CycleComplexity"
+      ],
+      "codom": "Fig10CycleComplexity"
+    },
+    {
+      "name": "make_Fig11C2vsEps",
+      "dom": [
+        "AutocorrAlpha1",
+        "DMFTAlpha1"
+      ],
+      "codom": "Fig11C2vsEps"
+    },
+    {
+      "name": "make_Fig12FrozenVsAlpha",
+      "dom": [
+        "FrozenVsAlpha"
+      ],
+      "codom": "Fig12FrozenVsAlpha"
+    },
+    {
+      "name": "make_Fig13MemoryCorrelation",
+      "dom": [
+        "MemoryCorrelation",
+        "DMFTMemory"
+      ],
+      "codom": "Fig13MemoryCorrelation"
+    },
+    {
+      "name": "make_Fig14Eps1Decorrelation",
+      "dom": [
+        "Eps1Decorrelation",
+        "DMFTMemory",
+        "AnalyticCurves"
+      ],
+      "codom": "Fig14Eps1Decorrelation"
+    },
+    {
+      "name": "make_Fig15CycleStretching",
+      "dom": [
+        "CyclePeriod",
+        "DMFTMemory"
+      ],
+      "codom": "Fig15CycleStretching"
+    },
+    {
+      "name": "make_Fig16QHeatmap",
+      "dom": [
+        "QHeatmap",
+        "AnalyticCurves"
+      ],
+      "codom": "Fig16QHeatmap"
+    },
+    {
+      "name": "make_Fig17OrderParameter",
+      "dom": [
+        "QvsTemperature",
+        "StaticDMFTSolution",
+        "DMFTFiniteBeta"
+      ],
+      "codom": "Fig17OrderParameter"
+    },
+    {
+      "name": "make_Fig18Aging",
+      "dom": [
+        "Aging"
+      ],
+      "codom": "Fig18Aging"
+    },
+    {
+      "name": "make_Fig19FiniteBeta",
+      "dom": [
+        "FiniteBetaTrajectories",
+        "DMFTFiniteBeta"
+      ],
+      "codom": "Fig19FiniteBeta"
+    },
+    {
+      "name": "make_FigOptimizerScaling",
+      "dom": [
+        "PlannerBenchmark"
+      ],
+      "codom": "FigOptimizerScaling"
+    },
+    {
+      "name": "make_FigSatisficingGap",
+      "dom": [
+        "RewardScanN",
+        "PlannerBenchmark",
+        "AnalyticCurves"
+      ],
+      "codom": "FigSatisficingGap"
+    }
+  ],
+  "math": {
+    "name": "SKGameMath",
+    "objects": [
+      {
+        "name": "Params",
+        "symbol": "(N,α,β,ε,J0,Jd)",
+        "space": "parameter space",
+        "paper_ref": "Sec. II",
+        "impl": "model.GameParams"
+      },
+      {
+        "name": "Ensemble",
+        "symbol": "(υ,η)",
+        "space": "moments of the J law",
+        "paper_ref": "Eqs. 9-10",
+        "impl": "model.upsilon / model.eta"
+      },
+      {
+        "name": "J",
+        "symbol": "J_ij",
+        "space": "R^{N×N}",
+        "paper_ref": "Eqs. 8, 11",
+        "impl": "model.InteractionEnsemble.sample"
+      },
+      {
+        "name": "Q",
+        "symbol": "Q_i(t)",
+        "space": "R^N",
+        "paper_ref": "Eq. 3",
+        "impl": "model.SKGame.Q"
+      },
+      {
+        "name": "m",
+        "symbol": "m_i(t)",
+        "space": "[-1,1]^N",
+        "paper_ref": "Eq. 2",
+        "impl": "model.SKGame.intentions"
+      },
+      {
+        "name": "S",
+        "symbol": "S_i(t)",
+        "space": "{-1,1}^N",
+        "paper_ref": "Eq. 1",
+        "impl": "model.SKGame.decisions"
+      },
+      {
+        "name": "Rvec",
+        "symbol": "R_i(t)",
+        "space": "R^N",
+        "paper_ref": "Eq. 4",
+        "impl": "model.SKGame.rewards"
+      },
+      {
+        "name": "Trajectory",
+        "symbol": "{Q,m,S}_{t}",
+        "space": "(R^N)^T",
+        "paper_ref": "Eqs. 5, 14",
+        "impl": "model.SKGame.run + recorders"
+      },
+      {
+        "name": "RN",
+        "symbol": "R_N",
+        "space": "R",
+        "paper_ref": "Eq. 12",
+        "impl": "observables.average_reward"
+      },
+      {
+        "name": "e",
+        "symbol": "e_i = S*_i R*_i",
+        "space": "R^N",
+        "paper_ref": "Eq. 16",
+        "impl": "observables.individual_rewards"
+      },
+      {
+        "name": "Corr",
+        "symbol": "C(t,t+τ), C(τ)",
+        "space": "R^{T×T}",
+        "paper_ref": "Eq. 15",
+        "impl": "observables.stationary_autocorr"
+      },
+      {
+        "name": "q",
+        "symbol": "q = C(t,t)",
+        "space": "[0,1]",
+        "paper_ref": "Sec. IV",
+        "impl": "observables.q_param"
+      },
+      {
+        "name": "M",
+        "symbol": "M(t)",
+        "space": "[-1,1]",
+        "paper_ref": "Eq. 11",
+        "impl": "observables.magnetisation"
+      },
+      {
+        "name": "Overlap",
+        "symbol": "C×_N",
+        "space": "R",
+        "paper_ref": "Eq. 17",
+        "impl": "observables.cross_overlap"
+      },
+      {
+        "name": "Phase",
+        "symbol": "FP / L-cycle / chaos",
+        "space": "label",
+        "paper_ref": "Fig. 1",
+        "impl": "observables.classify_phase"
+      },
+      {
+        "name": "Spectrum",
+        "symbol": "λ_max(J)",
+        "space": "R",
+        "paper_ref": "Eq. 20 (elliptic law)",
+        "impl": "theory.analytic.lambda_max_elliptic"
+      },
+      {
+        "name": "Tc",
+        "symbol": "T_c(ε)",
+        "space": "R_+",
+        "paper_ref": "Eq. 20",
+        "impl": "theory.analytic.Tc"
+      },
+      {
+        "name": "FixedPoints",
+        "symbol": "{m*: m*=tanh(βJm*)}",
+        "space": "subset of [-1,1]^N",
+        "paper_ref": "Eq. 19 (NMFE)",
+        "impl": "theory.complexity.count_*"
+      },
+      {
+        "name": "Sigma",
+        "symbol": "Σ(β,ε)",
+        "space": "R",
+        "paper_ref": "Eqs. 21-23",
+        "impl": "theory.analytic.complexity_fp_T0"
+      },
+      {
+        "name": "SigmaL",
+        "symbol": "Σ_L(α,η)",
+        "space": "R",
+        "paper_ref": "Eq. 25, B30",
+        "impl": "theory.complexity.Sigma2_saddle"
+      },
+      {
+        "name": "DMFT",
+        "symbol": "(C,G,q) effective process",
+        "space": "R^{T×T}×R^{T×T}",
+        "paper_ref": "Eqs. 30-35",
+        "impl": "theory.dmft.DMFTSolver"
+      },
+      {
+        "name": "SCSolution",
+        "symbol": "Δ(τ), τ1",
+        "space": "function",
+        "paper_ref": "Eqs. 36-39",
+        "impl": "theory.analytic.sompolinsky_crisanti"
+      },
+      {
+        "name": "RSStatic",
+        "symbol": "(q, χ)",
+        "space": "R^2",
+        "paper_ref": "Eqs. 40-44",
+        "impl": "theory.analytic.static_dmft_fixed_point"
+      },
+      {
+        "name": "Stability",
+        "symbol": "<|Q̂1(0)|²>^{-1}",
+        "space": "R",
+        "paper_ref": "Eqs. 45-50",
+        "impl": "theory.analytic.inverse_spectral_density_omega0"
+      },
+      {
+        "name": "Aging",
+        "symbol": "C(t_w, t_w+t)",
+        "space": "R^{n_w×n_t}",
+        "paper_ref": "Eqs. 51-52",
+        "impl": "model.TwoTimeRecorder"
+      },
+      {
+        "name": "Frequency",
+        "symbol": "ω0",
+        "space": "R_+",
+        "paper_ref": "Sec. VII C",
+        "impl": "observables.dominant_frequency"
+      },
+      {
+        "name": "Planner",
+        "symbol": "W = (J+Jᵀ)/2, H(S)",
+        "space": "quadratic form",
+        "paper_ref": "Eq. 12-13",
+        "impl": "optim.problem.PlannerProblem"
+      },
+      {
+        "name": "GroundState",
+        "symbol": "S* = argmax R_N",
+        "space": "{-1,1}^N",
+        "paper_ref": "Eq. 13",
+        "impl": "optim.solvers.*"
+      },
+      {
+        "name": "Parisi",
+        "symbol": "R_∞ = 0.7632(2-ε)",
+        "space": "R",
+        "paper_ref": "Eq. 13",
+        "impl": "theory.analytic.R_inf"
+      },
+      {
+        "name": "SymbolicProof",
+        "symbol": "identities",
+        "space": "SymPy",
+        "paper_ref": "all closed forms",
+        "impl": "theory.symbolic"
+      }
+    ],
+    "generators": [
+      {
+        "name": "moments",
+        "dom": [
+          "Params"
+        ],
+        "codom": "Ensemble",
+        "description": "υ = 1-ε+ε²/2, η = (1-ε)/υ"
+      },
+      {
+        "name": "sample_J",
+        "dom": [
+          "Params"
+        ],
+        "codom": "J",
+        "description": "J = (1-ε/2)J^S + (ε/2)J^A + J0/N + Jd·1"
+      },
+      {
+        "name": "intention",
+        "dom": [
+          "Q",
+          "Params"
+        ],
+        "codom": "m",
+        "description": "m = tanh(βQ)"
+      },
+      {
+        "name": "decide",
+        "dom": [
+          "m"
+        ],
+        "codom": "S",
+        "description": "logit sampling P(S=±1) = (1±m)/2"
+      },
+      {
+        "name": "reward",
+        "dom": [
+          "J",
+          "S"
+        ],
+        "codom": "Rvec",
+        "description": "R = J S"
+      },
+      {
+        "name": "learn",
+        "dom": [
+          "Q",
+          "Rvec",
+          "Params"
+        ],
+        "codom": "Q",
+        "description": "Q ← (1-α)Q + αR"
+      },
+      {
+        "name": "simulate",
+        "dom": [
+          "J",
+          "Params"
+        ],
+        "codom": "Trajectory",
+        "description": "iterate intention∘decide∘reward∘learn"
+      },
+      {
+        "name": "avg_reward",
+        "dom": [
+          "J",
+          "Trajectory"
+        ],
+        "codom": "RN",
+        "description": "R_N = SᵀJS/N"
+      },
+      {
+        "name": "indiv_reward",
+        "dom": [
+          "J",
+          "Trajectory"
+        ],
+        "codom": "e",
+        "description": "e_i = S_i (JS)_i"
+      },
+      {
+        "name": "autocorr",
+        "dom": [
+          "Trajectory"
+        ],
+        "codom": "Corr",
+        "description": "C(τ) = <m(t)·m(t+τ)>/N"
+      },
+      {
+        "name": "order_param",
+        "dom": [
+          "Trajectory"
+        ],
+        "codom": "q",
+        "description": "q = <m²>"
+      },
+      {
+        "name": "magnetise",
+        "dom": [
+          "Trajectory"
+        ],
+        "codom": "M",
+        "description": "M = ΣS/N"
+      },
+      {
+        "name": "overlap",
+        "dom": [
+          "e",
+          "e"
+        ],
+        "codom": "Overlap",
+        "description": "C× between two runs"
+      },
+      {
+        "name": "classify",
+        "dom": [
+          "Corr"
+        ],
+        "codom": "Phase",
+        "description": "smallest L with C(nL)=1"
+      },
+      {
+        "name": "two_time",
+        "dom": [
+          "Trajectory"
+        ],
+        "codom": "Aging",
+        "description": "C(t_w,t_w+t)"
+      },
+      {
+        "name": "frequency",
+        "dom": [
+          "Corr"
+        ],
+        "codom": "Frequency",
+        "description": "peak of |FFT C|²"
+      },
+      {
+        "name": "elliptic_edge",
+        "dom": [
+          "Ensemble"
+        ],
+        "codom": "Spectrum",
+        "description": "λ_max = √υ(1+η)"
+      },
+      {
+        "name": "critical_T",
+        "dom": [
+          "Spectrum"
+        ],
+        "codom": "Tc",
+        "description": "β_c λ_max = 1"
+      },
+      {
+        "name": "enumerate_fp",
+        "dom": [
+          "J",
+          "Params"
+        ],
+        "codom": "FixedPoints",
+        "description": "Gray-code / multistart Newton"
+      },
+      {
+        "name": "count",
+        "dom": [
+          "FixedPoints"
+        ],
+        "codom": "Sigma",
+        "description": "Σ = log E[N_J]/N"
+      },
+      {
+        "name": "annealed_T0",
+        "dom": [
+          "Ensemble"
+        ],
+        "codom": "Sigma",
+        "description": "Eq. 22-23"
+      },
+      {
+        "name": "cycle_saddle",
+        "dom": [
+          "Ensemble",
+          "Params"
+        ],
+        "codom": "SigmaL",
+        "description": "saddle of Eq. B40"
+      },
+      {
+        "name": "dmft_solve",
+        "dom": [
+          "Ensemble",
+          "Params"
+        ],
+        "codom": "DMFT",
+        "description": "Monte-Carlo self-consistency + Novikov response"
+      },
+      {
+        "name": "dmft_corr",
+        "dom": [
+          "DMFT"
+        ],
+        "codom": "Corr",
+        "description": "C(t,s) of the effective process"
+      },
+      {
+        "name": "sc_limit",
+        "dom": [
+          "DMFT"
+        ],
+        "codom": "SCSolution",
+        "description": "ε=1, α→0 reduction (Eq. 36)"
+      },
+      {
+        "name": "rs_static",
+        "dom": [
+          "Ensemble",
+          "Params"
+        ],
+        "codom": "RSStatic",
+        "description": "Eqs. 42-44"
+      },
+      {
+        "name": "perturb",
+        "dom": [
+          "RSStatic",
+          "Ensemble"
+        ],
+        "codom": "Stability",
+        "description": "Eq. 48 at ω=0"
+      },
+      {
+        "name": "stability_Tc",
+        "dom": [
+          "Stability"
+        ],
+        "codom": "Tc",
+        "description": "zero of Eq. 49 (corrected) = Eq. 20"
+      },
+      {
+        "name": "planner",
+        "dom": [
+          "J"
+        ],
+        "codom": "Planner",
+        "description": "symmetrise, drop diagonal"
+      },
+      {
+        "name": "optimise",
+        "dom": [
+          "Planner",
+          "Params"
+        ],
+        "codom": "GroundState",
+        "description": "exact / heuristic / annealing"
+      },
+      {
+        "name": "evaluate",
+        "dom": [
+          "Planner",
+          "GroundState"
+        ],
+        "codom": "RN",
+        "description": "R_N(S*)"
+      },
+      {
+        "name": "parisi",
+        "dom": [
+          "Ensemble"
+        ],
+        "codom": "Parisi",
+        "description": "R_∞ = 2·0.76317·(1-ε/2)"
+      },
+      {
+        "name": "verify",
+        "dom": [
+          "Ensemble"
+        ],
+        "codom": "SymbolicProof",
+        "description": "SymPy identities"
+      }
+    ],
+    "uses": [
+      {
+        "output": "SymbolicChecks",
+        "morphism": "verify"
+      },
+      {
+        "output": "SymbolicChecks",
+        "morphism": "moments"
+      },
+      {
+        "output": "AnalyticCurves",
+        "morphism": "moments"
+      },
+      {
+        "output": "AnalyticCurves",
+        "morphism": "elliptic_edge"
+      },
+      {
+        "output": "AnalyticCurves",
+        "morphism": "critical_T"
+      },
+      {
+        "output": "AnalyticCurves",
+        "morphism": "annealed_T0"
+      },
+      {
+        "output": "AnalyticCurves",
+        "morphism": "parisi"
+      },
+      {
+        "output": "AnalyticCurves",
+        "morphism": "sc_limit"
+      },
+      {
+        "output": "StaticDMFTSolution",
+        "morphism": "moments"
+      },
+      {
+        "output": "StaticDMFTSolution",
+        "morphism": "rs_static"
+      },
+      {
+        "output": "StaticDMFTSolution",
+        "morphism": "perturb"
+      },
+      {
+        "output": "StaticDMFTSolution",
+        "morphism": "stability_Tc"
+      },
+      {
+        "output": "CycleComplexity",
+        "morphism": "moments"
+      },
+      {
+        "output": "CycleComplexity",
+        "morphism": "cycle_saddle"
+      },
+      {
+        "output": "CycleComplexity",
+        "morphism": "annealed_T0"
+      },
+      {
+        "output": "DMFTAlpha1",
+        "morphism": "moments"
+      },
+      {
+        "output": "DMFTAlpha1",
+        "morphism": "dmft_solve"
+      },
+      {
+        "output": "DMFTAlpha1",
+        "morphism": "dmft_corr"
+      },
+      {
+        "output": "DMFTMemory",
+        "morphism": "moments"
+      },
+      {
+        "output": "DMFTMemory",
+        "morphism": "dmft_solve"
+      },
+      {
+        "output": "DMFTMemory",
+        "morphism": "dmft_corr"
+      },
+      {
+        "output": "DMFTMemory",
+        "morphism": "frequency"
+      },
+      {
+        "output": "DMFTFiniteBeta",
+        "morphism": "moments"
+      },
+      {
+        "output": "DMFTFiniteBeta",
+        "morphism": "dmft_solve"
+      },
+      {
+        "output": "DMFTFiniteBeta",
+        "morphism": "dmft_corr"
+      },
+      {
+        "output": "PhaseClassification",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "PhaseClassification",
+        "morphism": "intention"
+      },
+      {
+        "output": "PhaseClassification",
+        "morphism": "decide"
+      },
+      {
+        "output": "PhaseClassification",
+        "morphism": "reward"
+      },
+      {
+        "output": "PhaseClassification",
+        "morphism": "learn"
+      },
+      {
+        "output": "PhaseClassification",
+        "morphism": "simulate"
+      },
+      {
+        "output": "PhaseClassification",
+        "morphism": "autocorr"
+      },
+      {
+        "output": "PhaseClassification",
+        "morphism": "classify"
+      },
+      {
+        "output": "RewardScanAlpha",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "RewardScanAlpha",
+        "morphism": "intention"
+      },
+      {
+        "output": "RewardScanAlpha",
+        "morphism": "decide"
+      },
+      {
+        "output": "RewardScanAlpha",
+        "morphism": "reward"
+      },
+      {
+        "output": "RewardScanAlpha",
+        "morphism": "learn"
+      },
+      {
+        "output": "RewardScanAlpha",
+        "morphism": "simulate"
+      },
+      {
+        "output": "RewardScanAlpha",
+        "morphism": "indiv_reward"
+      },
+      {
+        "output": "RewardScanAlpha",
+        "morphism": "avg_reward"
+      },
+      {
+        "output": "RewardScanEps",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "RewardScanEps",
+        "morphism": "intention"
+      },
+      {
+        "output": "RewardScanEps",
+        "morphism": "decide"
+      },
+      {
+        "output": "RewardScanEps",
+        "morphism": "reward"
+      },
+      {
+        "output": "RewardScanEps",
+        "morphism": "learn"
+      },
+      {
+        "output": "RewardScanEps",
+        "morphism": "simulate"
+      },
+      {
+        "output": "RewardScanEps",
+        "morphism": "indiv_reward"
+      },
+      {
+        "output": "RewardScanEps",
+        "morphism": "avg_reward"
+      },
+      {
+        "output": "RewardScanNoise",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "RewardScanNoise",
+        "morphism": "intention"
+      },
+      {
+        "output": "RewardScanNoise",
+        "morphism": "decide"
+      },
+      {
+        "output": "RewardScanNoise",
+        "morphism": "reward"
+      },
+      {
+        "output": "RewardScanNoise",
+        "morphism": "learn"
+      },
+      {
+        "output": "RewardScanNoise",
+        "morphism": "simulate"
+      },
+      {
+        "output": "RewardScanNoise",
+        "morphism": "indiv_reward"
+      },
+      {
+        "output": "RewardScanNoise",
+        "morphism": "avg_reward"
+      },
+      {
+        "output": "RewardScanN",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "RewardScanN",
+        "morphism": "intention"
+      },
+      {
+        "output": "RewardScanN",
+        "morphism": "decide"
+      },
+      {
+        "output": "RewardScanN",
+        "morphism": "reward"
+      },
+      {
+        "output": "RewardScanN",
+        "morphism": "learn"
+      },
+      {
+        "output": "RewardScanN",
+        "morphism": "simulate"
+      },
+      {
+        "output": "RewardScanN",
+        "morphism": "indiv_reward"
+      },
+      {
+        "output": "RewardScanN",
+        "morphism": "avg_reward"
+      },
+      {
+        "output": "AutocorrAlpha1",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "AutocorrAlpha1",
+        "morphism": "intention"
+      },
+      {
+        "output": "AutocorrAlpha1",
+        "morphism": "decide"
+      },
+      {
+        "output": "AutocorrAlpha1",
+        "morphism": "reward"
+      },
+      {
+        "output": "AutocorrAlpha1",
+        "morphism": "learn"
+      },
+      {
+        "output": "AutocorrAlpha1",
+        "morphism": "simulate"
+      },
+      {
+        "output": "AutocorrAlpha1",
+        "morphism": "autocorr"
+      },
+      {
+        "output": "RewardDistributions",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "RewardDistributions",
+        "morphism": "intention"
+      },
+      {
+        "output": "RewardDistributions",
+        "morphism": "decide"
+      },
+      {
+        "output": "RewardDistributions",
+        "morphism": "reward"
+      },
+      {
+        "output": "RewardDistributions",
+        "morphism": "learn"
+      },
+      {
+        "output": "RewardDistributions",
+        "morphism": "simulate"
+      },
+      {
+        "output": "RewardDistributions",
+        "morphism": "indiv_reward"
+      },
+      {
+        "output": "RewardTrajectories",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "RewardTrajectories",
+        "morphism": "intention"
+      },
+      {
+        "output": "RewardTrajectories",
+        "morphism": "decide"
+      },
+      {
+        "output": "RewardTrajectories",
+        "morphism": "reward"
+      },
+      {
+        "output": "RewardTrajectories",
+        "morphism": "learn"
+      },
+      {
+        "output": "RewardTrajectories",
+        "morphism": "simulate"
+      },
+      {
+        "output": "RewardTrajectories",
+        "morphism": "indiv_reward"
+      },
+      {
+        "output": "CrossOverlap",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "CrossOverlap",
+        "morphism": "intention"
+      },
+      {
+        "output": "CrossOverlap",
+        "morphism": "decide"
+      },
+      {
+        "output": "CrossOverlap",
+        "morphism": "reward"
+      },
+      {
+        "output": "CrossOverlap",
+        "morphism": "learn"
+      },
+      {
+        "output": "CrossOverlap",
+        "morphism": "simulate"
+      },
+      {
+        "output": "CrossOverlap",
+        "morphism": "indiv_reward"
+      },
+      {
+        "output": "CrossOverlap",
+        "morphism": "overlap"
+      },
+      {
+        "output": "CooperationScan",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "CooperationScan",
+        "morphism": "intention"
+      },
+      {
+        "output": "CooperationScan",
+        "morphism": "decide"
+      },
+      {
+        "output": "CooperationScan",
+        "morphism": "reward"
+      },
+      {
+        "output": "CooperationScan",
+        "morphism": "learn"
+      },
+      {
+        "output": "CooperationScan",
+        "morphism": "simulate"
+      },
+      {
+        "output": "CooperationScan",
+        "morphism": "avg_reward"
+      },
+      {
+        "output": "CooperationScan",
+        "morphism": "magnetise"
+      },
+      {
+        "output": "FixedPointCounts",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "FixedPointCounts",
+        "morphism": "enumerate_fp"
+      },
+      {
+        "output": "FixedPointCounts",
+        "morphism": "count"
+      },
+      {
+        "output": "FrozenVsAlpha",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "FrozenVsAlpha",
+        "morphism": "intention"
+      },
+      {
+        "output": "FrozenVsAlpha",
+        "morphism": "decide"
+      },
+      {
+        "output": "FrozenVsAlpha",
+        "morphism": "reward"
+      },
+      {
+        "output": "FrozenVsAlpha",
+        "morphism": "learn"
+      },
+      {
+        "output": "FrozenVsAlpha",
+        "morphism": "simulate"
+      },
+      {
+        "output": "FrozenVsAlpha",
+        "morphism": "autocorr"
+      },
+      {
+        "output": "MemoryCorrelation",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "MemoryCorrelation",
+        "morphism": "intention"
+      },
+      {
+        "output": "MemoryCorrelation",
+        "morphism": "decide"
+      },
+      {
+        "output": "MemoryCorrelation",
+        "morphism": "reward"
+      },
+      {
+        "output": "MemoryCorrelation",
+        "morphism": "learn"
+      },
+      {
+        "output": "MemoryCorrelation",
+        "morphism": "simulate"
+      },
+      {
+        "output": "MemoryCorrelation",
+        "morphism": "autocorr"
+      },
+      {
+        "output": "Eps1Decorrelation",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "Eps1Decorrelation",
+        "morphism": "intention"
+      },
+      {
+        "output": "Eps1Decorrelation",
+        "morphism": "decide"
+      },
+      {
+        "output": "Eps1Decorrelation",
+        "morphism": "reward"
+      },
+      {
+        "output": "Eps1Decorrelation",
+        "morphism": "learn"
+      },
+      {
+        "output": "Eps1Decorrelation",
+        "morphism": "simulate"
+      },
+      {
+        "output": "Eps1Decorrelation",
+        "morphism": "autocorr"
+      },
+      {
+        "output": "CyclePeriod",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "CyclePeriod",
+        "morphism": "intention"
+      },
+      {
+        "output": "CyclePeriod",
+        "morphism": "decide"
+      },
+      {
+        "output": "CyclePeriod",
+        "morphism": "reward"
+      },
+      {
+        "output": "CyclePeriod",
+        "morphism": "learn"
+      },
+      {
+        "output": "CyclePeriod",
+        "morphism": "simulate"
+      },
+      {
+        "output": "CyclePeriod",
+        "morphism": "autocorr"
+      },
+      {
+        "output": "CyclePeriod",
+        "morphism": "frequency"
+      },
+      {
+        "output": "QHeatmap",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "QHeatmap",
+        "morphism": "intention"
+      },
+      {
+        "output": "QHeatmap",
+        "morphism": "decide"
+      },
+      {
+        "output": "QHeatmap",
+        "morphism": "reward"
+      },
+      {
+        "output": "QHeatmap",
+        "morphism": "learn"
+      },
+      {
+        "output": "QHeatmap",
+        "morphism": "simulate"
+      },
+      {
+        "output": "QHeatmap",
+        "morphism": "order_param"
+      },
+      {
+        "output": "QvsTemperature",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "QvsTemperature",
+        "morphism": "intention"
+      },
+      {
+        "output": "QvsTemperature",
+        "morphism": "decide"
+      },
+      {
+        "output": "QvsTemperature",
+        "morphism": "reward"
+      },
+      {
+        "output": "QvsTemperature",
+        "morphism": "learn"
+      },
+      {
+        "output": "QvsTemperature",
+        "morphism": "simulate"
+      },
+      {
+        "output": "QvsTemperature",
+        "morphism": "order_param"
+      },
+      {
+        "output": "QvsTemperature",
+        "morphism": "critical_T"
+      },
+      {
+        "output": "Aging",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "Aging",
+        "morphism": "intention"
+      },
+      {
+        "output": "Aging",
+        "morphism": "decide"
+      },
+      {
+        "output": "Aging",
+        "morphism": "reward"
+      },
+      {
+        "output": "Aging",
+        "morphism": "learn"
+      },
+      {
+        "output": "Aging",
+        "morphism": "simulate"
+      },
+      {
+        "output": "Aging",
+        "morphism": "two_time"
+      },
+      {
+        "output": "FiniteBetaTrajectories",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "FiniteBetaTrajectories",
+        "morphism": "intention"
+      },
+      {
+        "output": "FiniteBetaTrajectories",
+        "morphism": "decide"
+      },
+      {
+        "output": "FiniteBetaTrajectories",
+        "morphism": "reward"
+      },
+      {
+        "output": "FiniteBetaTrajectories",
+        "morphism": "learn"
+      },
+      {
+        "output": "FiniteBetaTrajectories",
+        "morphism": "simulate"
+      },
+      {
+        "output": "FiniteBetaTrajectories",
+        "morphism": "autocorr"
+      },
+      {
+        "output": "PlannerBenchmark",
+        "morphism": "sample_J"
+      },
+      {
+        "output": "PlannerBenchmark",
+        "morphism": "planner"
+      },
+      {
+        "output": "PlannerBenchmark",
+        "morphism": "optimise"
+      },
+      {
+        "output": "PlannerBenchmark",
+        "morphism": "evaluate"
+      }
+    ]
+  }
+}

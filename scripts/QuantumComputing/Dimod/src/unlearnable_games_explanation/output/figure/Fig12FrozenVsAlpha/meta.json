@@ -1,0 +1,16 @@
+{
+  "class": "Fig12FrozenVsAlpha",
+  "kind": "figure",
+  "paper_ref": "Fig. 12",
+  "hash": "c94745d7ac43",
+  "params": {},
+  "deps": {
+    "FrozenVsAlpha": "083bfaf204a4"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.4737548828125,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:17"
+}

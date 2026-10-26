@@ -1,0 +1,17 @@
+{
+  "class": "Fig13MemoryCorrelation",
+  "kind": "figure",
+  "paper_ref": "Fig. 13",
+  "hash": "0891def1a3a5",
+  "params": {},
+  "deps": {
+    "MemoryCorrelation": "ebd9ef668afa",
+    "DMFTMemory": "a66ae123fde8"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.48389196395874023,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:17"
+}

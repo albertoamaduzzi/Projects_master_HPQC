@@ -1,0 +1,17 @@
+{
+  "class": "Fig01PhaseDiagram",
+  "kind": "figure",
+  "paper_ref": "Fig. 1",
+  "hash": "ed220dac842d",
+  "params": {},
+  "deps": {
+    "PhaseClassification": "a7722601fa01",
+    "AnalyticCurves": "d3f484e7e819"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 0.7674007415771484,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:10"
+}

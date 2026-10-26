@@ -20,7 +20,7 @@ import numpy as np
 import os
 import sys
 from pathlib import Path
-from constants_analysis import BUILD_DIR, CSV_PATH
+from Projects_master_HPQC.scripts.ParallelComputing.Jacobi.constants_analysis import BUILD_DIR, CSV_PATH
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +169,7 @@ if __name__ == "__main__":
 
     # ---- 4. Generate plots ----------------------------------------------
     if not dry_run:
-        from analysis import load_results, plot_methods_comparison, plot_speedup_vs_grid
+        from Projects_master_HPQC.scripts.ParallelComputing.Jacobi.analysis import load_results, plot_methods_comparison, plot_speedup_vs_grid
         plots_dir = os.path.join(script_dir, "plots")
         df = load_results(csv_abs)
         plot_methods_comparison(df, output_dir=plots_dir)

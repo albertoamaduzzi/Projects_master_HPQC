@@ -1,0 +1,93 @@
+[
+  {
+    "name": "variance",
+    "eq": "Eq. 9",
+    "claim": "N Var J_ij = (1-e/2)^2+(e/2)^2 = 1 - e + e^2/2",
+    "passed": true,
+    "detail": "epsilon**2/2 - epsilon + 1"
+  },
+  {
+    "name": "eta",
+    "eq": "Eq. 10",
+    "claim": "corr(J_ij,J_ji) = (1-e)/ups",
+    "passed": true,
+    "detail": "1 - epsilon"
+  },
+  {
+    "name": "antisymmetric part drops out",
+    "eq": "after Eq. 12",
+    "claim": "sum S J S = (1-e/2) sum S J^S S",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "name": "R_inf",
+    "eq": "Eq. 13",
+    "claim": "(1/N) S^T J S at SK ground state = 2 e0 (1-e/2) = e0 (2-e)",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "name": "elliptic-law edge",
+    "eq": "Eq. 20",
+    "claim": "lambda_max = sqrt(ups)(1+eta) = (2-e)^2/(2 sqrt ups)  => T_c = lambda_max",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "name": "T_c from DMFT stability",
+    "eq": "Eq. 49-50 vs Eq. 20",
+    "claim": "beta(1-e)chi = 1 - beta sqrt(ups) gives T_c(e) of Eq. 20 (paper's Eq. 49 lacks the beta)",
+    "passed": true,
+    "detail": "residual corrected=[0.0, 0.0, 0.0, 0.0], literal Eq.49=[0.5, 0.3896250481049452, 0.18801108758923143, -0.00042767966516321675]"
+  },
+  {
+    "name": "EWMA noise",
+    "eq": "Eq. 18 / A2",
+    "claim": "alpha^2 sum_k (1-alpha)^{2k} = alpha/(2-alpha)",
+    "passed": true,
+    "detail": "-alpha/(alpha - 2)"
+  },
+  {
+    "name": "continuous limit",
+    "eq": "Eq. 33",
+    "claim": "[Q(t+a)-Q(t)]/a = Q' + (a/2) Q'' + O(a^2)",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "name": "Sompolinsky-Crisanti",
+    "eq": "Eq. 37-39, D5",
+    "claim": "Delta0 = 1-2/pi from U(Delta0)=0; tau1 = sqrt((pi-2)/(pi-3)) ~ 2.84",
+    "passed": true,
+    "detail": "Delta0=[(-2 + pi)/pi], tau1=2.83946"
+  },
+  {
+    "name": "fixed-point complexity",
+    "eq": "Eq. 22-23 vs B36",
+    "claim": "Sigma(1)=0.1992 (Tanaka-Edwards), Sigma(0)=0; Eq. 23 is the stationarity of Eq. 22",
+    "passed": true,
+    "detail": "Sigma(1)=0.199228491035784, dS22/dx=9.11350349688699E-17, dSB36/dx(eta=1/2)=-0.306713042463949"
+  },
+  {
+    "name": "Sigma_2(alpha=1) = 2 Sigma_1",
+    "eq": "Eq. B50",
+    "claim": "F(r=k=v=0, w=x) = 2 x Eq.22",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "name": "2-cycle Jacobian",
+    "eq": "Eq. B37",
+    "claim": "(J^alpha)^{-1} = [[1-a,1],[1,1-a]]/(1-(1-a)^2)",
+    "passed": true,
+    "detail": "alpha*(alpha - 2)"
+  },
+  {
+    "name": "paramagnetic chi",
+    "eq": "Eq. 50",
+    "claim": "chi = beta/(1-beta(1-e)chi) -> smaller root",
+    "passed": true,
+    "detail": "[(-sqrt(4*beta**2*epsilon - 4*beta**2 + 1) - 1)/(2*beta*(epsilon - 1)), (sqrt(4*beta**2*epsilon - 4*beta**2 + 1) - 1)/(2*beta*(epsilon - 1))]"
+  }
+]

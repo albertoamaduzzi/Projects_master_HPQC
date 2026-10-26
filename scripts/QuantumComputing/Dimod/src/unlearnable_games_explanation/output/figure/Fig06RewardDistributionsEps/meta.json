@@ -1,0 +1,16 @@
+{
+  "class": "Fig06RewardDistributionsEps",
+  "kind": "figure",
+  "paper_ref": "Fig. 6",
+  "hash": "2195862da974",
+  "params": {},
+  "deps": {
+    "RewardDistributions": "12c75f7561e7"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 1.5992648601531982,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:15"
+}

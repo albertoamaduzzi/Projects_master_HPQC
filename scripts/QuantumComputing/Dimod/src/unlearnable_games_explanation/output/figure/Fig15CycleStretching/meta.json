@@ -1,0 +1,17 @@
+{
+  "class": "Fig15CycleStretching",
+  "kind": "figure",
+  "paper_ref": "Fig. 15",
+  "hash": "2f3682c91354",
+  "params": {},
+  "deps": {
+    "CyclePeriod": "04a749e5c8a8",
+    "DMFTMemory": "a66ae123fde8"
+  },
+  "preset": "quick",
+  "seed": 12345,
+  "seconds": 1.2701563835144043,
+  "status": "ok",
+  "python": "3.13.16",
+  "time": "2026-10-18 20:42:19"
+}
