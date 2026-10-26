@@ -17,8 +17,12 @@ reward = -2 E / N (+ diag offset) and the benchmark compares on reward.
 """
 from __future__ import annotations
 
+import time
 from typing import Any, Callable
 
+import numpy as np
+
+from .problem import PlannerProblem
 from .solvers import DimodSamplerSolver
 
 
@@ -28,10 +32,12 @@ class QuantumAnnealingSolver(DimodSamplerSolver):
     def __init__(self, num_reads: int = 10000, annealing_time: float = 20.0, clique: bool = True,
                  use_simulator: bool = False, extra_kwargs: dict | None = None,
                  sampler_factory: Callable[[], Any] | None = None, solver_name: str | None = None,
-                 max_N: int | None = 170):
+                 max_N: int | None = 170, chain_strength: float | None = None):
         kw = {"num_reads": num_reads}
         if not use_simulator:
             kw["annealing_time"] = annealing_time
+            if chain_strength is not None:
+                kw["chain_strength"] = chain_strength
         kw.update(extra_kwargs or {})
         self.clique, self.use_simulator, self.solver_name = clique, use_simulator, solver_name
         super().__init__(sampler_factory or self.make_sampler,
@@ -47,3 +53,57 @@ class QuantumAnnealingSolver(DimodSamplerSolver):
         from dwave.system import DWaveSampler, EmbeddingComposite
         base = DWaveSampler(solver=self.solver_name) if self.solver_name else DWaveSampler()
         return EmbeddingComposite(base)
+
+    @property
+    def sampler(self):
+        if self._sampler is None:
+            self._sampler = self._factory()
+        return self._sampler
+
+    def largest_problem(self) -> int | None:
+        """Largest N the sampler accepts (clique size on the QPU; None = no limit). No QPU time."""
+        return getattr(self.sampler, "largest_clique_size", None)
+
+    def solver_id(self) -> str:
+        child = getattr(self.sampler, "child", self.sampler)
+        solver = getattr(child, "solver", None)
+        return getattr(solver, "name", type(self.sampler).__name__)
+
+    def sample_problem(self, P: PlannerProblem, rng=None) -> dict:
+        """One sampler call with every read kept: what a QPU benchmark needs.
+
+        Returns the distinct rewards found and how many reads gave each (so the success
+        probability per read can be computed later against any reference), the best
+        configuration, wall time, and the QPU timing / chain-break statistics when present.
+        Rewards are recomputed from the spins, not taken from the sampler's energies, so they
+        are exact in the units of R_N whatever scaling the sampler applied internally.
+        """
+        rng = np.random.default_rng(rng)
+        kw = dict(self.sample_kwargs)
+        params = getattr(self.sampler, "parameters", None)
+        if params is None or "seed" in params:
+            kw.setdefault("seed", int(rng.integers(2**31)))
+        t0 = time.perf_counter()
+        ss = self.sampler.sample(P.to_bqm(), **kw)
+        ss.resolve()
+        wall = time.perf_counter() - t0
+        agg = ss.aggregate()
+        S = np.asarray(agg.record.sample, float)[:, [list(agg.variables).index(i) for i in range(P.N)]]
+        counts = np.asarray(agg.record.num_occurrences, int)
+        rewards = np.atleast_1d(P.reward(S))
+        order = np.argsort(-rewards)
+        info = {"wall_seconds": wall, "num_reads": int(counts.sum()), "solver": self.solver_id(),
+                "sample_kwargs": {k: v for k, v in kw.items() if k != "seed"}}
+        timing = ss.info.get("timing")
+        if timing:
+            info["timing_us"] = {k: float(v) for k, v in timing.items() if np.isscalar(v)}
+        if "chain_break_fraction" in ss.record.dtype.names:
+            info["chain_break_fraction_mean"] = float(np.average(ss.record.chain_break_fraction,
+                                                                 weights=ss.record.num_occurrences))
+        if "embedding_context" in ss.info:
+            cs = ss.info["embedding_context"].get("chain_strength")
+            info["chain_strength"] = float(cs) if np.isscalar(cs) else None
+        best = S[order[0]]
+        return {"rewards": rewards[order].tolist(), "counts": counts[order].tolist(),
+                "best_reward": float(rewards[order[0]]),
+                "best_S": "".join("+" if x > 0 else "-" for x in best), "info": info}

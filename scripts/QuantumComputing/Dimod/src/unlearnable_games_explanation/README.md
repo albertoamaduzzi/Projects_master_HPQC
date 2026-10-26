@@ -20,6 +20,7 @@ skgame/                          Python package (NumPy/SciPy/Numba numerics, Sym
   optim/solvers.py               exact, greedy, SA, PT, τ-EO, SDP+GW, SK-game learning, dimod wrappers
   optim/quantum.py               QuantumAnnealingSolver (D-Wave clique / embedding composite) — the plug-in point
   optim/benchmark.py             scaling study: success probability, residual, TTS_99, breakdown size N*
+  optim/regimes.py               parameter points where the optimum is easy / hard (planner phase x game phase)
   outputs/                       one class per computation and per figure (objects of the category)
   registry.py                    Output base class, registry, caching pipeline, category export
   mathcat.py                     math objects / morphisms / uses relation
@@ -28,6 +29,9 @@ julia/SKGameCategory/            Catlab.jl module: presentations, DepGraph & Use
 category/                        exported category.json, .dot, .mmd, SKGamePaperLiteral.jl
 output/<kind>/<Class>/           every output, routed by class (result.npz / scalars.json / meta.json / figures)
 tests/                           pytest suite (unit, theory vs simulation, solvers, category invariants, integration)
+main_simulation.py / .ipynb      staged campaign: game + classical solvers + quantum annealer vs N, per regime
+cineca/                          Slurm scripts for Leonardo (classical array, QPU job, analysis, notebook)
+README_CINECA.md                 step-by-step procedure to run the campaign on Cineca with the D-Wave QPU
 ```
 
 ## Install and run
@@ -40,7 +44,7 @@ python -m skgame run Fig11C2vsEps --preset paper      # one figure (and only its
 python -m skgame deps Fig17OrderParameter             # upstream / downstream / derivation
 python -m skgame category                # export the category for Catlab
 python -m skgame.docgen                  # regenerate docs 02-05
-pytest                                   # 96 tests
+pytest                                   # 99 tests
 ```
 
 `quick` presets are scaled-down versions of the paper's (N ≤ 512, shorter times, fewer samples); `paper` presets use the paper's sizes where stated (N up to 1024, t up to 10^8 — hours to days). Caching: an output's hash covers its parameters, its class source code and its inputs' hashes, so editing a class recomputes exactly its downstream closure.
@@ -66,6 +70,18 @@ solvers = default_solvers("paper") + [QuantumAnnealingSolver(num_reads=1000, ann
 res = run_benchmark(solvers, BenchmarkConfig(Ns=(16, 32, 64, 96, 128, 160), n_instances=10, n_runs=5))
 ```
 `clique=True` uses `DWaveCliqueSampler` (dense SK instances need a clique embedding; ~170 logical spins on Advantage). Any dimod sampler can be passed through `sampler_factory=`. Use `use_simulator=True` to test the plumbing without a token.
+
+### Campaign over regimes: `main_simulation.py`
+
+For each regime of `skgame/optim/regimes.py` (ferromagnetic / boundary / spin-glass planner problem, crossed with the game's fixed-point, cycle, chaotic and paramagnetic phases) and each N on a linear grid, the campaign runs on the same instances the exact or best-known reference, the classical solvers, the quantum annealer (`QuantumAnnealingSolver.sample_problem`, every read kept) and the game itself. The stages are resumable and separable, so the QPU part can run where there is internet and the rest on compute nodes:
+
+```bash
+python main_simulation.py init --preset smoke --out results/smoke   # presets: smoke, small, full
+python main_simulation.py classical --out results/smoke
+python main_simulation.py sim --out results/smoke                   # or `qpu` with a Leap token
+python main_simulation.py analyze --out results/smoke               # summary.csv + figures
+```
+On Cineca: see [README_CINECA.md](README_CINECA.md).
 
 Caveat on "breakdown": above `n_exact` the reference is only best-known, so N* measures when a solver stops matching the best of the ensemble within its budget, not when it stops finding the true optimum. To push certification further, add an exact branch-and-bound / SDP-based solver (not included).
 
