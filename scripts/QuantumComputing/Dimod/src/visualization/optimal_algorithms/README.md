@@ -204,6 +204,35 @@ An exact Schrödinger simulation of 8 qubits ($2^8=256$ amplitudes), with no noi
 
 ---
 
+## Spin state and environment, algorithm by algorithm
+
+`state_and_environment.py` (~10 s) draws each algorithm on the same $N=24$ instance with three rows sharing the time axis:
+
+1. the **spin state**: one row per agent, red when the agent agrees with the ground state $S^\star$, blue when it disagrees. One global sign is chosen per run (so $-S^\star$ also counts as all red), so the ground state is a fully red column;
+2. the **environment** the algorithm reacts to;
+3. the **energy** $H/N$, with the ground state dashed.
+
+| algorithm | environment row | figure |
+|---|---|---|
+| greedy | satisfactions $\lambda_i$; black dot = the agent flipped at that step | `figures/se_greedy.png` |
+| SK game | incentives $Q_i$, the agents' memory of their rewards | `figures/se_game.png` |
+| SA | inverse temperature $\beta(t)$ and the satisfactions | `figures/se_sa.png` |
+| PT | overlap with $S^\star$ of the replica at each temperature (spin state of the coldest one) | `figures/se_pt.png` |
+| τ-EO | satisfactions + the agent picked by rank | `figures/se_eo.png` |
+| tabu | satisfactions + tabu agents (black dots) | `figures/se_tabu.png` |
+| SDP + GW | alignment of each vector $v_i$ with the ground-state direction; spins read through a fixed hyperplane | `figures/se_sdp.png` |
+| quantum annealing ($N=8$, exact) | schedule $A(s)$, $B(s)$; probability of every classical energy level; spin state = expected agreement (0 = undecided) | `figures/se_qa.png` |
+
+![](figures/se_game.png)
+
+**The game's final state, and greedy's.** Both end at an energy within about 1 % of the ground state (game: $-0.549$ vs $-0.557$ per spin). Yet 11 of 24 agents still disagree with $S^\star$. A local minimum can be **close in energy and far in configuration space**: this is the rugged landscape of SK_game step 5, seen from inside a single run. SA (`se_sa.png`) shows the opposite route. When hot, the spin state is a random mosaic. During cooling, whole groups of agents lock in, and the satisfactions turn uniformly green.
+
+![](figures/se_qa.png)
+
+**Quantum annealing.** At $s=0$ every agent is completely undecided (agreement 0): all $2^8$ configurations have equal weight. As the transverse field is removed, the agents decide **together**: the probability migrates from all energy levels down to the lowest ones. Two agents (4 and 5) end on the wrong side with substantial probability, because this anneal ($T=100$) is shorter than the adiabatic scale $1/\Delta_{\min}^2\approx700$, and $P(\text{ground})$ ends at 0.35.
+
+---
+
 ## Which algorithm for which regime
 
 Using the regimes of the campaign (`skgame/optim/regimes.py`):
