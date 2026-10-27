@@ -3,4 +3,4 @@ __pycache__/
 *.log
 *.toc
 *.out
-explanation_project/explanation_project.pdf
+explanation_project/*.pdf

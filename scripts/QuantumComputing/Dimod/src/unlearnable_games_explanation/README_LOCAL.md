@@ -74,6 +74,29 @@ python main_simulation.py qpu --out results/small
 python main_simulation.py analyze --out results/small
 ```
 
+## 4b. Spending QPU time safely (budget guard)
+
+Every QPU command accepts `--budget-seconds S`. Before each call it predicts the cost with the solver's timing model, times a safety factor ≥ 1.5. It makes the call only if the total spent stays ≤ S, and it counts the **real** charge after each call. `--spent` prints what has been charged so far. `--check` prints the prediction and spends nothing. Details: [`../../dwave_in_the_code.pdf`](../../dwave_in_the_code.pdf).
+
+**Test with at most 1 second of QPU time** (both topologies, N = 8 and 16, one instance, 100 reads: 4 calls, normally ~0.1–0.2 s):
+```powershell
+# PowerShell (Windows). In bash write T=results/qpu_test instead of the first line.
+$T = "results\qpu_test"
+python main_simulation.py init --preset smoke --out $T --Ns 8,16 --n-instances 1 --regimes sg_satisficing --num-reads 100
+python main_simulation.py qpu --out $T --check
+python main_simulation.py qpu --out $T --budget-seconds 1
+python main_simulation.py qpu --out $T --spent
+```
+
+**Full campaign within a monthly budget** (check on 27/10: Zephyr 52.3 s + Pegasus 105.0 s ≈ 157 s at 1000 reads):
+```powershell
+$F = "results\full"
+python main_simulation.py init --preset full --out $F --force      # add --num-reads 500 to halve the cost (bash: F=results/full)
+python main_simulation.py qpu --out $F --check
+python main_simulation.py qpu --out $F --budget-seconds 170        # never passes 170 s; rerun continues
+python main_simulation.py qpu --out $F --spent
+```
+
 ## 5. Look at the results
 
 ```bash
