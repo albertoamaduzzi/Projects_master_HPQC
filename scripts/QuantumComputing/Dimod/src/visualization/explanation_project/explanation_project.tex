@@ -295,6 +295,18 @@ dwave solvers -la       # list QPUs: Advantage_* (Pegasus), Advantage2_* (Zephyr
 dwave ping              # submit a tiny problem (a few ms of QPU time)
 \end{lstlisting}
 
+\paragraph{Getting the token, step by step} (details in \code{Dimod/LEAP_TOKEN.md}). A free Leap account has
+no usable token: the token belongs to a Leap \emph{project} with QPU time, which Cineca grants.
+\begin{enumerate}
+\item Create a Leap account at \url{https://cloud.dwavesys.com/leap/} with your \textbf{institutional} e-mail; every user needs one.
+\item Apply to Cineca's \textbf{ISCRA-C} call for D-Wave time. List the institutional e-mails of the Leap accounts and the minutes per month (Cineca's page states at most 20 min/month for 3 months, evaluated monthly). The \code{full} campaign needs about $124\,$s $\approx2\,$min, so 5--10 min/month is ample.
+\item After approval your account joins a Leap project with the minutes. Select it in Leap (username menu $\to$ Projects): each project has its own token.
+\item Copy the token from the dashboard (left column, \emph{API Token}, COPY), or from a terminal:
+\code{dwave auth login --oob} (open the printed link on your laptop, paste back the code), \code{dwave leap project ls}, then \code{dwave leap project token --project <NAME>}.
+\item Store it on every machine that calls the QPU: \code{dwave setup --oob --project <NAME>}, or \code{dwave config create} (paste it), or \code{export DWAVE_API_TOKEN=...}. Check with \code{dwave solvers -la} and \code{main_simulation.py qpu --check}.
+\end{enumerate}
+Never commit the token. If it leaks, RESET it on the Leap dashboard.
+
 \subsection{Functions and parameters, and their role here}
 {\small\begin{longtable}{L{4.0cm}L{5.4cm}L{5.6cm}}
 \toprule

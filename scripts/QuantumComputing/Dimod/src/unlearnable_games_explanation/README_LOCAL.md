@@ -29,6 +29,8 @@ It needs Python ≥ 3.10 (`python3 --version`); choose another interpreter with 
 
 ## 3. D-Wave token (only for the real QPU)
 
+How to obtain it (Leap account, Cineca ISCRA-C request, copying the token): [`../../LEAP_TOKEN.md`](../../LEAP_TOKEN.md).
+
 ```bash
 dwave config create          # paste the token of the Cineca Leap project
 dwave solvers -la            # an Advantage2_* (Zephyr) and an Advantage_* (Pegasus) should be listed
@@ -87,5 +89,5 @@ python SK_game/sk_game_explanation.py
 python optimal_algorithms/algorithms_explanation.py
 python embedding_explanation/embedding_explanation.py
 python noise_and_chains/noise_and_chains.py
-cd explanation_project && pdflatex explanation_project.tex && pdflatex explanation_project.tex
+bash explanation_project/build.sh      # -> Dimod/explanation_project.pdf
 ```

@@ -87,7 +87,7 @@ The quantum annealer runs through `skgame/optim/backends.py`: a back-end is `dev
 
 On Cineca (environment built locally and uploaded, QPU from Leonardo or from your computer): see [README_CINECA.md](README_CINECA.md).
 
-Everything on your own computer (environment + whole pipeline, one command): see [README_LOCAL.md](README_LOCAL.md). The full written explanation of the project, with all figures: [`../visualization/explanation_project/explanation_project.pdf`](../visualization/explanation_project/explanation_project.pdf).
+Everything on your own computer (environment + whole pipeline, one command): see [README_LOCAL.md](README_LOCAL.md). The full written explanation of the project, with all figures: [`../../explanation_project.pdf`](../../explanation_project.pdf) (top of the Dimod folder). How to get the D-Wave Leap token: [`../../LEAP_TOKEN.md`](../../LEAP_TOKEN.md).
 
 Caveat on "breakdown": above `n_exact` the reference is only best-known, so N* measures when a solver stops matching the best of the ensemble within its budget, not when it stops finding the true optimum. To push certification further, add an exact branch-and-bound / SDP-based solver (not included).
 
