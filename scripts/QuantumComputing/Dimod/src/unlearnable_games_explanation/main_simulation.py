@@ -309,8 +309,43 @@ def stage_embed(out: Path, cfg: CampaignConfig, specs, solver_name=None, log=pri
     return rows
 
 
+class QPUBudget:
+    """Hard cap on the QPU access time spent by one command (all back-ends together).
+
+    Before each call the cost is predicted with the solver's own timing model
+    (`estimate_qpu_access_time`) and inflated by a safety factor; the call is made only if
+    spent + inflated estimate <= limit. The factor starts at `safety` and grows if real
+    charges come out larger than predicted (factor >= 1.1 x worst observed actual/estimate).
+    After each call the REAL `qpu_access_time` returned by the QPU is added to `spent`.
+    """
+
+    def __init__(self, limit_s: float | None, safety: float = 1.5):
+        self.limit, self.safety, self.spent, self.worst_ratio = limit_s, safety, 0.0, 0.0
+
+    def factor(self) -> float:
+        return max(self.safety, 1.1 * self.worst_ratio)
+
+    def allows(self, estimate_s: float) -> bool:
+        return self.limit is None or self.spent + self.factor() * estimate_s <= self.limit
+
+    def charge(self, actual_s: float, estimate_s: float) -> None:
+        self.spent += actual_s
+        if estimate_s > 0 and actual_s > 0:
+            self.worst_ratio = max(self.worst_ratio, actual_s / estimate_s)
+
+
+def _call_estimate(be, N: int, cfg: CampaignConfig) -> float:
+    """Predicted QPU access time of one call [s]. Without a timing model (mock QPU) a
+    deliberately pessimistic formula: 20 ms programming + reads x (anneal + 300 us)."""
+    est = be.estimate_access_time(N) if be.device == "qpu" else 0.0
+    if est is None:
+        est = 0.020 + cfg.num_reads * (cfg.annealing_time * 1e-6 + 300e-6)
+    return float(est)
+
+
 def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys=None, max_calls=None,
-                 solver_name=None, check_only=False, log=print, retries=3, backend=None) -> None:
+                 solver_name=None, check_only=False, log=print, retries=3, backend=None,
+                 budget: QPUBudget | None = None) -> None:
     be = backend or make_backend(out, cfg, spec, solver_name)
     limit = be.largest_problem()
     log(f"[anneal] backend={be.spec} solver={be.solver_id()} largest_problem={limit}")
@@ -325,9 +360,15 @@ def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys
         _estimate_qpu_time(be, todo, log)
         return
     total_access = 0.0
+    budget = budget or QPUBudget(None)
     for n, (key, eps, J0, N, b) in enumerate(todo):
         if max_calls is not None and n >= max_calls:
             log(f"[anneal] stopped after --max-calls {max_calls}; rerun to continue")
+            break
+        est = _call_estimate(be, N, cfg)
+        if not budget.allows(est):
+            log(f"[anneal] budget: spent {budget.spent:.3f}s of {budget.limit:.3f}s; next call (N={N}) estimated "
+                f"{est:.3f}s x safety {budget.factor():.2f} would exceed it -> stopped (rerun to continue)")
             break
         J = ensure_instances(out, cfg, key, eps, J0, N)
         P = PlannerProblem(J[b])
@@ -341,12 +382,33 @@ def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys
                 log(f"[anneal] {key} N={N} i={b}: {type(exc).__name__}: {exc}; retry in {2 ** (attempt + 1)}s")
                 time.sleep(2 ** (attempt + 1))
         res.update(key=key, eps=eps, J0=J0, N=N, instance=b, backend=be.spec)
+        res["info"]["estimated_access_s"] = est
         _write_json(anneal_path(out, be.label, key, N, b), res)
         acc = res["info"].get("timing_us", {}).get("qpu_access_time", 0.0) / 1e6
+        budget.charge(acc if acc > 0 else est, est)
         total_access += acc
         cbf = res["info"].get("chain_break_fraction_mean")
         log(f"[anneal] {n + 1:4d}/{len(todo)} {be.label} {key:10s} N={N:4d} i={b} best={res['best_reward']:.5f} "
-            f"chain_breaks={'-' if cbf is None else f'{cbf:.3f}'} qpu_access={acc * 1e3:.1f}ms (total {total_access:.2f}s)")
+            f"chain_breaks={'-' if cbf is None else f'{cbf:.3f}'} qpu_access={acc * 1e3:.1f}ms (est {est * 1e3:.0f}ms) "
+            f"(total {total_access:.3f}s)")
+
+
+def qpu_spent(out: Path, log=print) -> dict:
+    """QPU access time already spent in a campaign, per back-end, from the saved results
+    (the value D-Wave charged for each call), with the ratio to the prediction."""
+    rows = {}
+    for f in sorted((out / "anneal").glob("qpu_*/*/*.json")) if (out / "anneal").exists() else []:
+        info = json.loads(f.read_text())["info"]
+        r = rows.setdefault(f.parent.parent.name, {"calls": 0, "spent_s": 0.0, "est_s": 0.0})
+        r["calls"] += 1
+        r["spent_s"] += info.get("timing_us", {}).get("qpu_access_time", 0.0) / 1e6
+        r["est_s"] += info.get("estimated_access_s", 0.0)
+    total = sum(r["spent_s"] for r in rows.values())
+    for name, r in rows.items():
+        ratio = f"{r['spent_s'] / r['est_s']:.2f}" if r["est_s"] else "n/a"
+        log(f"[spent] {name:22s} {r['calls']:4d} calls  {r['spent_s']:8.3f} s  (actual/estimate = {ratio})")
+    log(f"[spent] total QPU access time in {out}: {total:.3f} s")
+    return rows
 
 
 def _estimate_qpu_time(be, todo, log) -> None:
@@ -713,6 +775,10 @@ def main(argv=None) -> None:
         if name == "qpu":
             p.add_argument("--check", action="store_true",
                            help="connect, print solver and clique size, estimate QPU time; spends nothing")
+            p.add_argument("--budget-seconds", type=float,
+                           help="hard cap on the QPU access time this command may spend (all back-ends together)")
+            p.add_argument("--spent", action="store_true",
+                           help="print the QPU time already spent in this campaign; spends nothing")
     p = sub.add_parser("embed", parents=[common], help="compute and cache embeddings, print chain statistics")
     p.add_argument("--backend", nargs="+", help="default: every back-end of the config (qpu ones need the token)")
     p.add_argument("--solver")
@@ -752,9 +818,15 @@ def main(argv=None) -> None:
             sys.exit(f"`{a.cmd}` runs {a.cmd}:* back-ends only, got {specs}")
         if a.solver and len(specs) > 1:
             sys.exit("--solver pins one QPU: pass a single --backend with it")
+        if getattr(a, "spent", False):
+            qpu_spent(out)
+            return
+        budget = QPUBudget(getattr(a, "budget_seconds", None))
         for spec in specs:
             stage_anneal(out, cfg, spec, keys=a.problem, max_calls=a.max_calls, solver_name=a.solver,
-                         check_only=getattr(a, "check", False))
+                         check_only=getattr(a, "check", False), budget=budget)
+        if budget.limit is not None and not getattr(a, "check", False):
+            print(f"[budget] spent {budget.spent:.3f}s of the {budget.limit:.3f}s allowed by --budget-seconds")
     elif a.cmd == "embed":
         stage_embed(out, cfg, a.backend or cfg.backends, solver_name=a.solver)
     elif a.cmd == "analyze":

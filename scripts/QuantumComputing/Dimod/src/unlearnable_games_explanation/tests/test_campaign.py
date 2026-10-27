@@ -93,3 +93,30 @@ def test_zephyr_and_pegasus_qpu_backends_compared(tmp_path, monkeypatch):
     assert {c["N"] for c in comp} == {8, 12}
     assert all(c["device"] == "qpu" for c in comp)
     assert (out / "summary" / "backend_comparison.csv").exists()
+
+
+def test_qpu_budget_guard_logic():
+    b = ms.QPUBudget(1.0, safety=1.5)
+    assert b.allows(0.6) and not b.allows(0.7)            # 1.5 x 0.7 > 1
+    b.charge(0.4, 0.2)                                     # charged twice the estimate
+    assert b.spent == 0.4 and b.factor() == pytest.approx(2.2)
+    assert not b.allows(0.3)                               # 0.4 + 2.2 x 0.3 > 1
+    assert ms.QPUBudget(None).allows(1e9)
+
+
+def test_qpu_budget_stops_before_overspending(tmp_path, monkeypatch, capsys):
+    import dwave.system
+    from dwave.system.testing import MockDWaveSampler
+    monkeypatch.setattr(dwave.system, "DWaveSampler",
+                        lambda solver=None, **kw: MockDWaveSampler(topology_type="zephyr", topology_shape=[3, 4]))
+    out = tmp_path / "b"
+    ms.main(["init", "--out", str(out), "--Ns", "8,12", "--n-instances", "1", "--regimes", "sg_satisficing",
+             "--num-reads", "100", "--backends", "qpu:zephyr:clique"])
+    ms.main(["qpu", "--out", str(out), "--budget-seconds", "0.01"])      # less than one call
+    assert not list((out / "anneal").rglob("*.json")) if (out / "anneal").exists() else True
+    ms.main(["qpu", "--out", str(out), "--budget-seconds", "1"])
+    files = list((out / "anneal" / "qpu_zephyr_clique").rglob("*.json"))
+    assert len(files) == 2
+    assert all("estimated_access_s" in json.loads(f.read_text())["info"] for f in files)
+    rows = ms.qpu_spent(out, log=lambda *a: None)
+    assert rows["qpu_zephyr_clique"]["calls"] == 2 and rows["qpu_zephyr_clique"]["spent_s"] < 1
