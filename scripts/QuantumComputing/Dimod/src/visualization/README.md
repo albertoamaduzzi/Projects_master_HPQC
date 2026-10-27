@@ -8,7 +8,7 @@ Read in this order; each folder has a README with the step-by-step explanation a
 | [`optimal_algorithms/`](optimal_algorithms/README.md) | each optimiser of the benchmark (exact, greedy, game learning, SA, PT, τ-EO, tabu, SDP+GW, dimod samplers, quantum annealing), described with the glossary terms and shown acting on an SK instance |
 | [`embedding_explanation/`](embedding_explanation/README.md) | how the all-to-all SK problem is embedded on D-Wave Zephyr and Pegasus (chains, step by step), and [how to tune chains and the QPU](embedding_explanation/chains_and_tuning.md) |
 | [`noise_and_chains/`](noise_and_chains/README.md) | how the chain strength and the energy compression were derived and measured, step by step; simulated noise experiments (coupler errors, chain breaks, temperature, biases) and their remedies |
-| [`explanation_project/`](explanation_project/explanation_project.pdf) | **everything in one document**: `explanation_project.tex` (+ compiled PDF), including how D-Wave is used, the QPU budget, the testing procedure and what testing found |
+| [`explanation_project/`](explanation_project/explanation_project.tex) | **everything in one document**: `explanation_project.tex`; the compiled PDF is at the top of the Dimod folder, [`../../explanation_project.pdf`](../../explanation_project.pdf), including how D-Wave is used, the QPU budget, the testing procedure and what testing found |
 
 `common.py` holds the shared helpers (instances, energy, local fields, satisfaction, exhaustive landscape). Use the same Python environment as the campaign:
 
@@ -18,5 +18,5 @@ python optimal_algorithms/algorithms_explanation.py       # ~1 min
 python embedding_explanation/embedding_explanation.py     # ~30 s (--heuristic: +3 min)
 python optimal_algorithms/state_and_environment.py        # ~10 s
 python noise_and_chains/noise_and_chains.py               # ~4 min
-cd explanation_project && pdflatex explanation_project.tex && pdflatex explanation_project.tex
+bash explanation_project/build.sh                         # compiles the .tex -> Dimod/explanation_project.pdf
 ```

@@ -102,6 +102,8 @@ Poi `source cineca/env.sh`, che carica il modulo, il venv e le variabili. Ogni j
 
 ## 5. Token Leap (dove girerà lo stadio QPU)
 
+Come ottenerlo passo per passo (account Leap, richiesta ISCRA-C a Cineca, copia del token, `dwave setup --oob` su Leonardo senza browser): [`../../LEAP_TOKEN.md`](../../LEAP_TOKEN.md).
+
 Il token si copia dalla dashboard Leap (https://cloud.dwavesys.com/leap/), **selezionando il progetto Cineca**: il token è per progetto.
 ```bash
 dwave config create          # alla domanda "Authentication token" incolla il token; il resto: Invio
