@@ -468,18 +468,18 @@ def collect(out: Path, cfg: CampaignConfig) -> list[dict]:
                 done = [(b, r) for b, r in enumerate(recs) if r is not None]
                 if not done:
                     continue
-                p = np.array([np.sum(np.array(r["counts"])[_success(r["rewards"], ref[b])]) / np.sum(r["counts"])
+                p = np.array([np.sum(np.array(r["counts"])[_success(r["rewards"], ref[b])]) / max(1, np.sum(r["counts"]))
                               for b, r in done])
                 best_res = np.array([(ref[b] - r["best_reward"]) / abs(ref[b]) for b, r in done])
                 mean_res = np.array([np.average((ref[b] - np.array(r["rewards"])) / abs(ref[b]), weights=r["counts"])
-                                     for b, r in done])
+                                     if np.sum(r["counts"]) else np.nan for b, r in done])
                 t_read = np.median([_time_per_read(r) for b, r in done])
                 acc = [r["info"].get("timing_us", {}).get("qpu_access_time", np.nan) / 1e6 for b, r in done]
                 cbf = [r["info"].get("chain_break_fraction_mean", np.nan) for b, r in done]
                 extra = {}
                 if all("polished_rewards" in r for b, r in done):
                     pp = np.array([np.sum(np.array(r["polished_counts"])[_success(r["polished_rewards"], ref[b])])
-                                   / np.sum(r["polished_counts"]) for b, r in done])
+                                   / max(1, np.sum(r["polished_counts"])) for b, r in done])
                     extra.update(p_success_polished=float(np.median(pp)),
                                  residual_polished=float(np.median([(ref[b] - r["polished_best_reward"]) / abs(ref[b])
                                                                     for b, r in done])))
@@ -493,7 +493,7 @@ def collect(out: Path, cfg: CampaignConfig) -> list[dict]:
                 rows.append(dict(base, kind="anneal", method=f"anneal_{s}", regime="", n_done=len(done), **extra,
                                  p_success_median=float(np.median(p)), p_success_mean=float(p.mean()),
                                  p_best_found=float(np.mean(best_res <= TOL)),
-                                 residual_median=float(np.median(best_res)), residual_mean_read=float(np.median(mean_res)),
+                                 residual_median=float(np.median(best_res)), residual_mean_read=float(np.nanmedian(mean_res)) if np.isfinite(mean_res).any() else None,
                                  seconds_median=t_read, tts99=_tts(p.mean(), t_read),
                                  qpu_access_s=float(np.nansum(acc)), chain_break_fraction=_nan_to_none(float(np.mean(cbf)))))
             for r in regimes:
@@ -671,10 +671,138 @@ def plot_backend_comparison(out: Path, comp: list[dict], rows: list[dict], show=
     return path
 
 
+def chain_break_table(out: Path, cfg: CampaignConfig) -> list[dict]:
+    """Solution quality as a function of the number of broken chains in the read.
+
+    One row per (back-end, problem class, N, number of broken chains): how many reads, and among
+    them the success probability and the mean residual, raw and after greedy polishing. The
+    reference is the same as in `collect` (exact / classical, improved by any annealer read);
+    if the classical stage has not run yet it is the best read of all annealers ("best seen").
+    """
+    if not (out / "anneal").exists():
+        return []
+    labels = sorted(p.name for p in (out / "anneal").glob("*"))
+    rows = []
+    for key, eps, J0 in _classes(cfg):
+        for N in cfg.Ns:
+            recs = {lab: [json.loads(p.read_text()) if p.exists() else None
+                          for p in (anneal_path(out, lab, key, N, b) for b in range(cfg.n_instances))]
+                    for lab in labels}
+            if not any(r for v in recs.values() for r in v):
+                continue
+            cp = classical_path(out, key, N)
+            if cp.exists():
+                c = json.loads(cp.read_text())
+                ref, src = np.array(c["ref"], float), ("exact" if c["ref_exact"] else "classical")
+            else:
+                ref, src = np.full(cfg.n_instances, -INF), "best_seen"
+            for v in recs.values():
+                for b, r in enumerate(v):
+                    if r is not None:
+                        ref[b] = max(ref[b], r["best_reward"], r.get("polished_best_reward", -INF))
+            for lab, v in recs.items():
+                acc = {}
+                for b, r in enumerate(v):
+                    if r is None or "reads" not in r:
+                        continue
+                    t = r["reads"]
+                    rw, nb, ct = (np.array(t[k], float) for k in ("reward", "n_broken", "count"))
+                    pr = np.array(t["polished_reward"], float) if t.get("polished_reward") else None
+                    ok = _success(rw, ref[b])
+                    okp = _success(pr, ref[b]) if pr is not None else None
+                    for k in np.unique(nb).astype(int):
+                        m = nb == k
+                        a = acc.setdefault(k, {"reads": 0, "succ": 0.0, "succ_p": 0.0, "res": 0.0, "res_p": 0.0})
+                        a["reads"] += ct[m].sum()
+                        a["succ"] += ct[m][ok[m]].sum()
+                        a["res"] += np.sum(ct[m] * (ref[b] - rw[m]) / abs(ref[b]))
+                        if pr is not None:
+                            a["succ_p"] += ct[m][okp[m]].sum()
+                            a["res_p"] += np.sum(ct[m] * (ref[b] - pr[m]) / abs(ref[b]))
+                tot = sum(a["reads"] for a in acc.values())
+                for k, a in sorted(acc.items()):
+                    rows.append({"backend": lab, "problem": key, "N": N, "n_broken": k, "reads": int(a["reads"]),
+                                 "frac_reads": a["reads"] / tot, "p_success": a["succ"] / a["reads"],
+                                 "p_success_polished": a["succ_p"] / a["reads"],
+                                 "residual_mean": a["res"] / a["reads"], "residual_polished_mean": a["res_p"] / a["reads"],
+                                 "reference": src})
+    return rows
+
+
+def plot_chain_breaks(out: Path, rows: list[dict], min_reads: int = 5, show=False) -> Path | None:
+    if not rows:
+        return None
+    import matplotlib
+    if not show:
+        matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    labs = list(dict.fromkeys(r["backend"] for r in rows))
+    panels = [("frac_reads", "fraction of reads"), ("residual_mean", "mean residual (raw read)"),
+              ("residual_polished_mean", "mean residual after polish"), ("p_success", "P(read = reference)")]
+    fig, axes = plt.subplots(len(panels), len(labs), figsize=(4.6 * len(labs), 2.7 * len(panels)), squeeze=False)
+    cm = plt.get_cmap("viridis")
+    Ns = sorted({r["N"] for r in rows})
+    for j, lab in enumerate(labs):
+        for i, (m, ylab) in enumerate(panels):
+            ax = axes[i, j]
+            for N in Ns:
+                agg = {}
+                for r in rows:                       # pool the problem classes
+                    if r["backend"] == lab and r["N"] == N:
+                        a = agg.setdefault(r["n_broken"], [0, 0.0])
+                        a[0] += r["reads"]
+                        a[1] += r[m] * r["reads"] if m != "frac_reads" else r["reads"]
+                tot = sum(a[0] for a in agg.values()) or 1
+                pts = sorted((k, (a[1] / tot) if m == "frac_reads" else a[1] / a[0]) for k, a in agg.items()
+                             if m == "frac_reads" or a[0] >= min_reads)
+                if pts:
+                    x, y = np.array(pts, float).T
+                    ax.plot(x, y, "o-", ms=3, color=cm(Ns.index(N) / max(1, len(Ns) - 1)), label=f"N={N}")
+            if i == 0:
+                ax.set_title(lab)
+                ax.set_yscale("log")
+            if j == 0:
+                ax.set_ylabel(ylab)
+            if i == len(panels) - 1:
+                ax.set_xlabel("number of broken chains in the read")
+    axes[0, -1].legend(fontsize=6, ncol=2)
+    fig.tight_layout()
+    path = out / "summary" / "chain_breaks.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=130)
+    plt.close(fig) if not show else plt.show()
+    return path
+
+
+def report_chain_breaks(out: Path, cfg: CampaignConfig, log=print) -> list[dict]:
+    rows = chain_break_table(out, cfg)
+    if not rows:
+        log("[chains] no per-read chain-break data (results produced before this feature, or no embedded back-end)")
+        return rows
+    path = out / "summary" / "chain_breaks.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    fig = plot_chain_breaks(out, rows)
+    for lab in dict.fromkeys(r["backend"] for r in rows):
+        for N in sorted({r["N"] for r in rows if r["backend"] == lab}):
+            sel = [r for r in rows if r["backend"] == lab and r["N"] == N]
+            reads = sum(r["reads"] for r in sel)
+            mean_nb = sum(r["n_broken"] * r["reads"] for r in sel) / reads
+            z = sum(r["reads"] for r in sel if r["n_broken"] == 0) / reads
+            log(f"[chains] {lab:22s} N={N:4d}: {reads:6d} reads, mean broken chains {mean_nb:6.3f}, "
+                f"reads with no broken chain {z:6.1%}")
+    log(f"[chains] -> {path}" + (f", {fig}" if fig else ""))
+    return rows
+
+
 def stage_analyze(out: Path, cfg: CampaignConfig, log=print, show=False) -> list[dict]:
+    report_chain_breaks(out, cfg, log=log)                # works before the classical stage too
     rows = collect(out, cfg)
     if not rows:
-        log("[analyze] nothing to analyse yet: run the classical stage first")
+        log("[analyze] nothing else to analyse yet: run the classical stage first")
         return rows
     path = write_summary(out, rows)
     figs = plot_summary(out, rows, show=show)
@@ -783,6 +911,8 @@ def main(argv=None) -> None:
     p.add_argument("--backend", nargs="+", help="default: every back-end of the config (qpu ones need the token)")
     p.add_argument("--solver")
     p = sub.add_parser("analyze", parents=[common], help="summary.csv and figures")
+    sub.add_parser("chains", parents=[common],
+                   help="broken chains per read and solution quality vs number of broken chains (no QPU)")
     a = ap.parse_args(argv)
 
     out = a.out
@@ -831,6 +961,8 @@ def main(argv=None) -> None:
         stage_embed(out, cfg, a.backend or cfg.backends, solver_name=a.solver)
     elif a.cmd == "analyze":
         stage_analyze(out, cfg)
+    elif a.cmd == "chains":
+        report_chain_breaks(out, cfg)
 
 
 if __name__ == "__main__":

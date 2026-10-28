@@ -97,6 +97,11 @@ python main_simulation.py qpu --out $F --budget-seconds 170        # never passe
 python main_simulation.py qpu --out $F --spent
 ```
 
+**Broken chains.** Every QPU call now saves, read by read, how many chains broke and which spins they belonged to. To see the solution quality as a function of the number of broken chains (no QPU time; works before the classical stage too):
+```powershell
+python main_simulation.py chains --out $F      # summary\chain_breaks.csv + chain_breaks.png (also done by analyze)
+```
+
 ## 5. Look at the results
 
 ```bash
