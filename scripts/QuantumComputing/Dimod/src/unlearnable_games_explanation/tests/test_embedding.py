@@ -61,3 +61,38 @@ def test_embedded_simulator_finds_small_ground_state(tmp_path, method):
     assert r["info"]["chain_strength"] == pytest.approx(1.414 * np.sqrt(np.mean(
         [v ** 2 for v in P.to_bqm().quadratic.values()])) * np.sqrt(9))
     assert 0.0 <= r["info"]["chain_break_fraction_mean"] <= 1.0
+
+
+def test_qubo_and_ising_are_the_same_problem():
+    import itertools
+    import dimod
+    P = PlannerProblem.random(9, rng=2)
+    Q, off = P.to_qubo()
+    qubo = dimod.BinaryQuadraticModel.from_qubo(Q, offset=off)
+    ising = P.to_bqm()
+    for bits in itertools.product([0, 1], repeat=9):
+        x = dict(enumerate(bits))
+        S = {i: 2 * b - 1 for i, b in x.items()}
+        assert qubo.energy(x) == pytest.approx(ising.energy(S))
+        assert ising.energy(S) == pytest.approx(P.energy(np.array([S[i] for i in range(9)])))
+    assert qubo.change_vartype(dimod.SPIN, inplace=False).is_almost_equal(ising)
+
+
+@pytest.mark.parametrize("method", ["majority_vote", "discard"])
+def test_per_read_broken_chains_are_recorded(tmp_path, method):
+    P = PlannerProblem.random(20, rng=4)
+    be = AnnealBackend("sim:zephyr:clique", AnnealSettings(sim_num_reads=120, sim_num_sweeps=50,
+                       chain_strength_prefactor=0.3, chain_break_method=method), cache_root=tmp_path)
+    r = be.sample(P, rng=0)
+    hist = {int(k): v for k, v in r["info"]["broken_chains_hist"].items()}
+    assert sum(hist.values()) == 120                                   # every physical read counted
+    assert sum(r["info"]["chain_break_count"]) == sum(k * v for k, v in hist.items())
+    t = r["reads"]
+    assert sum(t["count"]) == 120 - r["info"]["discarded_reads"]
+    assert len(t["reward"]) == len(t["n_broken"]) == len(t["polished_reward"])
+    if method == "discard":
+        assert set(t["n_broken"]) <= {0} and r["info"]["discarded_reads"] == 120 - hist.get(0, 0)
+    else:
+        assert max(t["n_broken"]) == max(hist) and r["info"]["discarded_reads"] == 0
+        assert r["info"]["chain_break_fraction_mean"] == pytest.approx(
+            sum(k * v for k, v in hist.items()) / (120 * 20))

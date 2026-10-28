@@ -142,45 +142,57 @@ class AnnealBackend:
         return self._embeddings[N]
 
     # -------------------------------------------------------------------- sampling ------
-    def sample_kwargs(self, bqm, emb) -> dict:
+    def sample_kwargs(self) -> dict:
+        """Keyword arguments for the (physical) sampler itself."""
         s = self.settings
         if self.device == "qpu":
-            kw = {"num_reads": s.num_reads, "annealing_time": s.annealing_time}
-        else:
-            kw = {"num_reads": s.sim_num_reads, "num_sweeps": s.sim_num_sweeps}
-        if self.embedded:
-            from dwave.embedding.chain_strength import uniform_torque_compensation
-            kw["chain_strength"] = partial(uniform_torque_compensation, prefactor=s.chain_strength_prefactor)
-            kw["chain_break_method"] = _chain_break_method(s.chain_break_method, bqm, emb)
-            kw["return_embedding"] = True
-        return kw
+            return {"num_reads": s.num_reads, "annealing_time": s.annealing_time}
+        return {"num_reads": s.sim_num_reads, "num_sweeps": s.sim_num_sweeps}
 
     def sample(self, P: PlannerProblem, rng=None) -> dict:
-        from dwave.system import FixedEmbeddingComposite
+        """One call. For embedded back-ends this does explicitly what FixedEmbeddingComposite does
+        (embed -> sample -> unembed), so that the PHYSICAL reads are available in between: from
+        them `broken_chains` tells, read by read, which logical spins had a broken chain."""
         rng = np.random.default_rng(rng)
         bqm = P.to_bqm()
-        if self.embedded:
-            emb = self.embedding(P.N)
-            sampler = FixedEmbeddingComposite(self.child, emb)
-        else:
-            emb, sampler = None, self.child
-        kw = self.sample_kwargs(bqm, emb)
+        kw = self.sample_kwargs()
         params = getattr(self.child, "parameters", {}) or {}
         if self.device == "sim" and "seed" in params:
             kw["seed"] = int(rng.integers(2**31))
+        broken, phys_counts, cs_used, emb = None, None, None, None
         t0 = time.perf_counter()
-        ss = sampler.sample(bqm, **kw)
-        ss.resolve()
+        if self.embedded:
+            import dimod
+            from dwave.embedding import EmbeddedStructure, broken_chains, unembed_sampleset
+            from dwave.embedding.chain_strength import uniform_torque_compensation
+            emb = self.embedding(P.N)
+            structure = EmbeddedStructure(self.child.edgelist, emb)
+            target = structure.embed_bqm(bqm, chain_strength=partial(
+                uniform_torque_compensation, prefactor=self.settings.chain_strength_prefactor),
+                smear_vartype=dimod.SPIN)
+            cs_used = structure.chain_strength
+            phys = self.child.sample(target, **kw)
+            phys.resolve()
+            chains = [emb[i] for i in range(P.N)]
+            broken = np.asarray(broken_chains(phys, chains), bool)          # (physical rows, N)
+            phys_counts = np.asarray(phys.record.num_occurrences, int)
+            ss = unembed_sampleset(phys, structure, bqm,
+                                   chain_break_method=_chain_break_method(self.settings.chain_break_method, bqm, emb),
+                                   chain_break_fraction=True)
+            ss.info.update({k: v for k, v in phys.info.items() if k not in ss.info})
+        else:
+            ss = self.child.sample(bqm, **kw)
+            ss.resolve()
         wall = time.perf_counter() - t0
-        out = sampleset_statistics(ss, P, wall, polish=self.settings.polish)
+        out = sampleset_statistics(ss, P, wall, polish=self.settings.polish, broken=broken, phys_counts=phys_counts,
+                                   discard=self.settings.chain_break_method == "discard")
         info = out["info"]
         info.update(backend=self.spec, solver=self.solver_id(), settings=asdict(self.settings),
-                    sample_kwargs={k: v for k, v in kw.items() if not callable(v) and k != "seed"})
+                    sample_kwargs={k: v for k, v in kw.items() if k != "seed"})
         if emb is not None:
             info["embedding"] = chain_stats(emb)
-            ctx = ss.info.get("embedding_context", {})
-            cs = ctx.get("chain_strength")
-            info["chain_strength"] = float(cs) if np.isscalar(cs) else None
+            info["chain_lengths"] = [len(emb[i]) for i in range(P.N)]
+            info["chain_strength"] = float(cs_used) if np.isscalar(cs_used) else None
             info["max_abs_logical_coupling"] = float(np.max(np.abs(P.W)))
         return out
 
@@ -207,36 +219,77 @@ def _chain_break_method(name: str, bqm, emb):
     raise ValueError(f"chain_break_method must be one of {CHAIN_BREAK_METHODS}")
 
 
-def sampleset_statistics(ss, P: PlannerProblem, wall: float, polish: bool = False) -> dict:
+def sampleset_statistics(ss, P: PlannerProblem, wall: float, polish: bool = False, broken=None,
+                         phys_counts=None, discard: bool = False) -> dict:
     """Distinct rewards and their read counts (best first), best spins, QPU timing, chain breaks.
 
     Rewards are recomputed from the spins, so they are exact in units of R_N whatever scaling
     the sampler applied. With `polish`, every distinct read is also relaxed by greedy single-flip
     ascent (a classical post-processing step that repairs the residual errors of chain breaks
     and of analogue noise) and reported separately.
+
+    With `broken` (physical rows x N booleans from dwave.embedding.broken_chains) the result also
+    has, read by read, how many chains broke:
+      out["reads"]                  distinct (configuration, number of broken chains) pairs:
+                                    reward, polished_reward, n_broken, count
+      info["broken_chains_hist"]    {number of broken chains: number of reads}
+      info["chain_break_count"]     for each logical spin i, in how many reads its chain broke
+      info["discarded_reads"]       reads dropped by chain_break_method="discard"
     """
     agg = ss.aggregate()
-    cols = [list(agg.variables).index(i) for i in range(P.N)]
-    S = np.asarray(agg.record.sample, float)[:, cols]
+    if len(agg) == 0:                       # chain_break_method="discard" dropped every read
+        S = np.zeros((0, P.N))
+    else:
+        cols = [list(agg.variables).index(i) for i in range(P.N)]
+        S = np.asarray(agg.record.sample, float)[:, cols]
     counts = np.asarray(agg.record.num_occurrences, int)
-    rewards = np.atleast_1d(P.reward(S))
+    rewards = np.atleast_1d(P.reward(S)) if len(S) else np.zeros(0)
     order = np.argsort(-rewards)
     info = {"wall_seconds": wall, "num_reads": int(counts.sum())}
     timing = ss.info.get("timing")
     if timing:
         info["timing_us"] = {k: float(v) for k, v in timing.items() if np.isscalar(v)}
-    if "chain_break_fraction" in ss.record.dtype.names:
+    if "chain_break_fraction" in ss.record.dtype.names and len(ss):
         info["chain_break_fraction_mean"] = float(np.average(ss.record.chain_break_fraction,
                                                              weights=ss.record.num_occurrences))
-    out = {"rewards": rewards[order].tolist(), "counts": counts[order].tolist(),
-           "best_reward": float(rewards[order[0]]), "best_S": _spin_string(S[order[0]]), "info": info}
-    if polish:
+    empty = len(S) == 0
+    out = {"rewards": rewards[order].tolist() if not empty else [], "counts": counts[order].tolist(),
+           "best_reward": float(rewards[order[0]]) if not empty else -np.inf,
+           "best_S": _spin_string(S[order[0]]) if not empty else "", "info": info}
+    polish_of = None
+    if polish and empty:
+        out.update(polished_rewards=[], polished_counts=[], polished_best_reward=-np.inf, polished_best_S="")
+        polish_of = {}
+    elif polish:
         from .solvers import _greedy
         Sp = np.array([_greedy(P.W, s.copy())[0] for s in S])
         rp = np.atleast_1d(P.reward(Sp))
         op = np.argsort(-rp)
         out.update(polished_rewards=rp[op].tolist(), polished_counts=counts[op].tolist(),
                    polished_best_reward=float(rp[op[0]]), polished_best_S=_spin_string(Sp[op[0]]))
+        polish_of = {S[k].tobytes(): float(rp[k]) for k in range(len(S))}
+    if broken is not None:
+        nb_phys = broken.sum(axis=1)
+        info["chain_break_count"] = (broken * phys_counts[:, None]).sum(axis=0).astype(int).tolist()
+        hist = {}
+        for nb, c in zip(nb_phys, phys_counts):
+            hist[int(nb)] = hist.get(int(nb), 0) + int(c)
+        info["broken_chains_hist"] = {str(k): v for k, v in sorted(hist.items())}
+        kept = nb_phys == 0 if discard else np.ones(len(nb_phys), bool)
+        info["discarded_reads"] = int(phys_counts[~kept].sum())
+        nb_rows = nb_phys[kept]
+        Sr = (np.asarray(ss.record.sample, float)[:, [list(ss.variables).index(i) for i in range(P.N)]]
+              if len(ss) else np.zeros((0, P.N)))
+        assert len(Sr) == len(nb_rows), "unembedded rows do not match the physical reads"
+        table = {}
+        for s_row, nb, c in zip(Sr, nb_rows, ss.record.num_occurrences):
+            key = (s_row.tobytes(), int(nb))
+            table[key] = table.get(key, 0) + int(c)
+        keys = list(table)
+        Sk = np.array([np.frombuffer(k[0]) for k in keys]).reshape(len(keys), P.N)
+        rk = np.atleast_1d(P.reward(Sk)) if keys else np.zeros(0)
+        out["reads"] = {"reward": rk.tolist(), "n_broken": [k[1] for k in keys], "count": [table[k] for k in keys],
+                        "polished_reward": [polish_of[k[0]] for k in keys] if polish_of is not None else None}
     return out
 
 
