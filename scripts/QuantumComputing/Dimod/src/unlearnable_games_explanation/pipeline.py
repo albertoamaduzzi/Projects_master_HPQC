@@ -1,17 +1,18 @@
-"""The QPU pipeline in linear steps: list of N -> p_opt(class, N, machine) -> SK runs -> ground states.
+"""The QPU pipeline in linear steps: list of N -> p_opt(N, machine) -> SK runs -> ground states.
 
     python main_simulation.py init      --preset full --out results/sk --Ns 8:160:8 --n-instances 5
     python main_simulation.py budget    --out results/sk --total 178        # 0. what it will cost (spends nothing)
-    python main_simulation.py calibrate --out results/sk --budget-seconds 55  # 1. p_opt for every (class, N, machine)
+    python main_simulation.py calibrate --out results/sk --budget-seconds 55  # 1. p_opt for every (N, machine), all classes
     python main_simulation.py budget    --out results/sk --total 178 --fill # 1b. reads that spend all that is left
     python main_simulation.py run       --out results/sk --total 178        # 2. the SK problems, with p_opt
     python main_simulation.py report    --out results/sk                    # 3. ground state, energy, ... (no QPU)
 
-Step 1, calibration. For every problem class, every machine and every N of the list (up to the largest clique the machine
+Step 1, calibration. For every machine and every N of the list, on the pure SK class (up to the largest clique the machine
 embeds) one SK instance is annealed with p = 0.75, 1, 1.414, 2, 3, 4, 6, climbing from the smallest,
 and stops at the first p for which no chain breaks in any read. That p is p_opt(N, machine):
-the smallest chain coupling that makes every chain act as one spin (per class: the ferromagnetic
-class has stronger fields on the chains and needs a larger p). Result: calibration/p_opt.csv,
+the smallest chain coupling that makes every chain act as one spin. One value per (machine, N) is
+shared by every problem class (the embedding depends only on topology and N; the ferromagnetic class
+has stronger fields, so its chains may break a little more often: `report`/`compare` show it). Result: calibration/p_opt.csv,
 calibration/p_opt.png; the table is stored in config.json and step 2 uses exactly it.
 
 Step 2, run. Every instance of every problem class is annealed, N by N (both machines at each N, so a
@@ -90,16 +91,17 @@ def budget(out: Path, cfg, total: float = 178.0, fill: bool = False, margin: flo
     classes = ms._classes(cfg)
     spent = spent_in_campaign(out)
     reached = cs._saved_ok(out, 0.0)
+    ckey = calibration_class(cfg, getattr(cfg, "calibration_class", None))
     cal_left = run_fixed = run_per_read = run_now = 0.0
     max_call_reads = 10 ** 9
     for be, N in _pairs(cfg, bes):
         e1, e2 = _est(be, N, cfg, 1), _est(be, N, cfg, 1001)
         per_read = (e2 - e1) / 1000
         max_call_reads = min(max_call_reads, int(0.95 / per_read) if per_read > 0 else 10 ** 6)
+        if (be.label, ckey, N) not in reached and str(N) not in ((cfg.chain_strength_by_N or {}).get(be.label) or {}):
+            done = [p for p in GRID if cs.scan_path(out, be.label, ckey, N, p, 0).exists()]
+            cal_left += (len(GRID) - len(done)) * _est(be, N, cfg, CAL_READS)
         for key, *_ in classes:
-            if (be.label, key, N) not in reached:
-                done = [p for p in GRID if cs.scan_path(out, be.label, key, N, p, 0).exists()]
-                cal_left += (len(GRID) - len(done)) * _est(be, N, cfg, CAL_READS)
             todo = sum(not ms.anneal_path(out, be.label, key, N, b).exists() for b in range(cfg.n_instances))
             run_fixed += todo * (e1 - per_read)
             run_per_read += todo * per_read
@@ -107,7 +109,7 @@ def budget(out: Path, cfg, total: float = 178.0, fill: bool = False, margin: flo
     left = total - sum(spent.values())
     log(f"[budget] available {total:.1f} s; already spent by this campaign: calibration {spent['calibrate']:.1f} s, "
         f"run {spent['run']:.1f} s, shim {spent['shim']:.1f} s -> left {left:.1f} s")
-    log(f"[budget] 1. calibrate: {len(classes)} problem classes x {len(_pairs(cfg, bes))} (N, machine) pairs; "
+    log(f"[budget] 1. calibrate: {len(_pairs(cfg, bes))} (N, machine) pairs, shared by the {len(classes)} classes; "
         f"still to do <= {cal_left:.1f} s (full grid; the climb usually stops earlier)")
     log(f"[budget] 2. run:       {len(classes)} classes x {cfg.n_instances} instances x {cfg.num_reads} reads per "
         f"(N, machine); still to do {run_now:.1f} s")
@@ -137,21 +139,40 @@ def budget(out: Path, cfg, total: float = 178.0, fill: bool = False, margin: flo
     return res
 
 
+def calibration_class(cfg, key=None) -> str:
+    """The problem class the shared calibration is measured on: `key`, else the pure SK class, else the first."""
+    import main_simulation as ms
+    keys = [k for k, *_ in ms._classes(cfg)]
+    if key is not None:
+        if key not in keys:
+            raise SystemExit(f"[calibrate] {key} is not a problem class of this campaign: {keys}")
+        return key
+    return "eps0_J00" if "eps0_J00" in keys else keys[0]
+
+
 def calibrate(out: Path, cfg, budget_s: float | None = None, check: bool = False, threshold: float = 0.0,
-              keys=None, log=print) -> dict:
-    """p_opt for every (problem class, N, machine): adaptive climb of GRID, 200 reads, instance 0."""
+              key=None, log=print) -> dict:
+    """ONE p_opt per (machine, N), shared by every problem class: the embedding depends only on the
+    topology and N. Measured on one class (default the pure SK one): adaptive climb of GRID, 200 reads,
+    instance 0. Stored in config.json as chain_strength_by_N; any per-class table is removed."""
     import main_simulation as ms
     import coupling_scan as cs
-    keys = keys or [k for k, *_ in ms._classes(cfg)]
-    cs.find_best_coupling_per_problem(out, cfg, cfg.Ns, prefactors=GRID, num_reads=CAL_READS, keys=keys,
+    key = calibration_class(cfg, key)
+    log(f"[calibrate] shared calibration per (machine, N), measured on problem class {key}")
+    cs.find_best_coupling_per_problem(out, cfg, cfg.Ns, prefactors=GRID, num_reads=CAL_READS, keys=[key],
                                       threshold=threshold, budget=ms.QPUBudget(budget_s),
                                       check_only=check, apply=True, adaptive=True, log=log)
     if check:
         return {}
     cfg2 = ms.load_config(out)
-    if cfg2.chain_strength_by_class:
-        _write_table(out, cfg2.chain_strength_by_class, log)
-    return cfg2.chain_strength_by_class
+    best = (cfg2.chain_strength_by_class or {}).get(key) or {}
+    cfg2.chain_strength_by_N = best
+    cfg2.chain_strength_by_class = {}
+    cfg2.calibration_class = key
+    ms.save_config(out, cfg2)
+    if best:
+        _write_table(out, {key: best}, log)
+    return best
 
 
 def _write_table(out, by_class, log):
@@ -196,7 +217,7 @@ def _write_table(out, by_class, log):
     fig.tight_layout()
     fig.savefig(d / "p_opt.png", dpi=130)
     plt.close(fig)
-    log("[calibrate] p_opt(problem class, N, machine):")
+    log(f"[calibrate] p_opt(N, machine), used by EVERY problem class (measured on {next(iter(by_class))}):")
     for r in rows:
         log(f"[calibrate]   {r['machine']:20s} {r['problem']:9s} N={r['N']:4d}  p_opt={r['p_opt']:<6g} {r['note']}")
     log(f"[calibrate] -> {d / 'p_opt.csv'}, {d / 'p_opt.png'} (and config.json: step 2 uses this table)")
@@ -205,9 +226,8 @@ def _write_table(out, by_class, log):
 def missing_calibration(out: Path, cfg, backends=None) -> list:
     import main_simulation as ms
     bes = backends or _qpu_backends(out, cfg)
-    t = cfg.chain_strength_by_class or {}
-    return [(be.label, key, N) for be, N in _pairs(cfg, bes) for key, *_ in ms._classes(cfg)
-            if str(N) not in ((t.get(key) or {}).get(be.label) or {})]
+    t = cfg.chain_strength_by_N or {}
+    return [(be.label, N) for be, N in _pairs(cfg, bes) if str(N) not in (t.get(be.label) or {})]
 
 
 def run(out: Path, cfg, budget_s: float | None = None, check: bool = False, allow_uncalibrated: bool = False,
@@ -216,7 +236,7 @@ def run(out: Path, cfg, budget_s: float | None = None, check: bool = False, allo
     bes = _qpu_backends(out, cfg)
     miss = missing_calibration(out, cfg, bes)
     if miss and not allow_uncalibrated:
-        raise SystemExit(f"[run] no p_opt for {len(miss)} (machine, problem, N): {miss[:8]}{' ...' if len(miss) > 8 else ''}\n"
+        raise SystemExit(f"[run] no p_opt for {len(miss)} (machine, N): {miss[:8]}{' ...' if len(miss) > 8 else ''}\n"
                          f"      run `calibrate` first (or --allow-uncalibrated to interpolate)")
     budget = ms.QPUBudget(budget_s)
     for N in cfg.Ns:                     # N-major: both machines at each N before the next N

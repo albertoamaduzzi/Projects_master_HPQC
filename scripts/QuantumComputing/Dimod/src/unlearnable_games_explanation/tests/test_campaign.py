@@ -270,7 +270,7 @@ def test_linear_pipeline_on_mock(tmp_path, monkeypatch):
 
 
 def test_pipeline_all_classes_and_fill(tmp_path, monkeypatch):
-    """p_opt per (class, N, machine); budget --fill sizes the reads so the run uses what is left."""
+    """One p_opt per (machine, N) shared by every class; budget --fill sizes the reads to use what is left."""
     import csv as _csv
     import dwave.system
     import pipeline
@@ -282,22 +282,23 @@ def test_pipeline_all_classes_and_fill(tmp_path, monkeypatch):
              "--num-reads", "20", "--backends", "qpu:zephyr:clique"])
     ms.main(["calibrate", "--out", str(out)])
     cfg = ms.load_config(out)
-    assert set(cfg.chain_strength_by_class) == {"eps0_J03", "eps0_J00"}
-    for key in ("eps0_J03", "eps0_J00"):
-        assert set(cfg.chain_strength_by_class[key]["qpu_zephyr_clique"]) == {"8", "12"}
+    assert cfg.chain_strength_by_class == {} and cfg.calibration_class == "eps0_J00"
+    assert set(cfg.chain_strength_by_N["qpu_zephyr_clique"]) == {"8", "12"}
+    assert not (out / "coupling_scan" / "qpu_zephyr_clique" / "eps0_J03").exists()   # measured on one class only
     rows = list(_csv.DictReader(open(out / "calibration" / "p_opt.csv")))
-    assert len(rows) == 4 and {r["problem"] for r in rows} == {"eps0_J03", "eps0_J00"}
+    assert len(rows) == 2
     assert pipeline.missing_calibration(out, cfg) == []
     spent_cal = pipeline.spent_in_campaign(out)["calibrate"]
     total = spent_cal + 4.0
     res = pipeline.budget(out, cfg, total=total, fill=True, margin=0.5, log=lambda *a: None)
+    assert res["calibrate_left_s"] == 0
     cfg = ms.load_config(out)
     assert cfg.num_reads == res["num_reads"] > 20
     ms.main(["run", "--out", str(out), "--total", str(total)])
     res_rows = list(_csv.DictReader(open(out / "results" / "sk_qpu_results.csv")))
     assert len(res_rows) == 2 * 2 * 2                          # classes x N x instances
-    for r in res_rows:                                         # each class with its own p_opt
-        assert float(r["p_used"]) == float(cfg.chain_strength_by_class[r["problem"]]["qpu_zephyr_clique"][r["N"]])
+    for r in res_rows:                                         # the same p for both classes at each N
+        assert float(r["p_used"]) == float(cfg.chain_strength_by_N["qpu_zephyr_clique"][r["N"]])
     assert pipeline.spent_in_campaign(out)["run"] <= total - spent_cal
 
 
