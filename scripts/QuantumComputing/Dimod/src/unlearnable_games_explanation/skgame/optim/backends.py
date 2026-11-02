@@ -134,6 +134,8 @@ class AnnealBackend:
         if N not in self._embeddings:
             if self.cache is not None:
                 emb = self.cache.get(self.graph_id(), self.strategy, N, self.target)
+                if self.cache.last_status.startswith("recomputed"):
+                    print(f"[embedding] {self.spec} N={N}: {self.cache.last_status}")
             else:
                 emb = self.strategy.embed(N, self.target)
             if not emb:

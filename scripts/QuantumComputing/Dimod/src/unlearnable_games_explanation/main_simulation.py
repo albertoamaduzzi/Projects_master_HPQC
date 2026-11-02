@@ -138,6 +138,16 @@ def _json_default(x):
     raise TypeError(type(x))
 
 
+def _spins(S) -> str:
+    """Configuration as a string of + and - (agent 0 first)."""
+    return "".join("+" if x > 0 else "-" for x in np.asarray(S).ravel())
+
+
+def _canonical(spins: str) -> str:
+    """S and -S have the same energy (no field): fix the sign so that agent 0 plays +."""
+    return spins if not spins or spins[0] == "+" else spins.translate(str.maketrans("+-", "-+"))
+
+
 def _nan_to_none(x):
     return None if x is None or (isinstance(x, float) and not math.isfinite(x)) else x
 
@@ -220,26 +230,35 @@ def stage_classical(out: Path, cfg: CampaignConfig, keys=None, log=print) -> Non
             J = ensure_instances(out, cfg, key, eps, J0, N)
             if not classical_path(out, key, N).exists():
                 rng = np.random.default_rng(np.random.SeedSequence([cfg.seed, 1, ci, N]))
-                rec = {"key": key, "eps": eps, "J0": J0, "N": N, "ref": [], "ref_exact": N <= cfg.n_exact,
+                rec = {"key": key, "eps": eps, "J0": J0, "N": N, "ref": [], "ref_S": [], "ref_source": [],
+                       "ref_exact": N <= cfg.n_exact,
                        "solvers": {s.name: {"reward": [], "seconds": []} for s in solvers},
                        "upper_bound": []}
                 for b in range(cfg.n_instances):
                     P = PlannerProblem(J[b])
                     ub = np.nan
+                    best, best_S, best_src = -INF, None, None
                     for s in solvers:
                         for _ in range(cfg.n_runs):
                             o = s.solve(P, rng.integers(2**63))
                             rec["solvers"][s.name]["reward"].append(o.reward)
                             rec["solvers"][s.name]["seconds"].append(o.seconds)
                             ub = np.fmin(ub, o.info.get("upper_bound_reward", np.nan))
-                    best = max(v["reward"][-1 - r] for v in rec["solvers"].values() for r in range(cfg.n_runs))
+                            if o.reward > best:
+                                best, best_S, best_src = o.reward, o.S, s.name
                     if rec["ref_exact"]:
-                        ref = exact.solve(P).reward
-                        assert best <= ref + TOL * max(1, abs(ref)), "a heuristic beat the exact optimum"
+                        ex = exact.solve(P)
+                        assert best <= ex.reward + TOL * max(1, abs(ex.reward)), "a heuristic beat the exact optimum"
+                        ref, ref_S, src = ex.reward, ex.S, "exact"
                     else:
-                        ref = max([best] + [reference.solve(P, rng.integers(2**63)).reward
-                                            for _ in range(cfg.ref_restarts)])
+                        ref, ref_S, src = best, best_S, best_src
+                        for _ in range(cfg.ref_restarts):
+                            o = reference.solve(P, rng.integers(2**63))
+                            if o.reward > ref:
+                                ref, ref_S, src = o.reward, o.S, "reference_pt"
                     rec["ref"].append(ref)
+                    rec["ref_S"].append(_spins(ref_S))
+                    rec["ref_source"].append(src)
                     rec["upper_bound"].append(_nan_to_none(float(ub)))
                 for v in rec["solvers"].values():          # (instance, run) layout
                     v["reward"] = np.reshape(v["reward"], (cfg.n_instances, cfg.n_runs)).tolist()
@@ -343,6 +362,18 @@ def _call_estimate(be, N: int, cfg: CampaignConfig) -> float:
     return float(est)
 
 
+def _transient(exc: Exception) -> bool:
+    """Worth retrying? Network / service problems yes; errors in the problem or the embedding
+    (they would fail identically every time, and fail before any QPU time is used) no."""
+    try:
+        from minorminer.utils.exceptions import EmbeddingError
+        if isinstance(exc, EmbeddingError):
+            return False
+    except ImportError:  # pragma: no cover
+        pass
+    return not isinstance(exc, (ValueError, KeyError, TypeError, AssertionError))
+
+
 def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys=None, max_calls=None,
                  solver_name=None, check_only=False, log=print, retries=3, backend=None,
                  budget: QPUBudget | None = None) -> None:
@@ -377,7 +408,7 @@ def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys
                 res = be.sample(P, rng=np.random.SeedSequence([cfg.seed, 3, N, b]))
                 break
             except Exception as exc:                     # network hiccups, solver busy, ...
-                if attempt == retries:
+                if attempt == retries or not _transient(exc):
                     raise
                 log(f"[anneal] {key} N={N} i={b}: {type(exc).__name__}: {exc}; retry in {2 ** (attempt + 1)}s")
                 time.sleep(2 ** (attempt + 1))
@@ -798,8 +829,74 @@ def report_chain_breaks(out: Path, cfg: CampaignConfig, log=print) -> list[dict]
     return rows
 
 
+def ground_states(out: Path, cfg: CampaignConfig, log=print) -> list[dict]:
+    """The ground state (best configuration) of every instance, from every source available.
+
+    Candidates: the classical reference (exact Gray-code enumeration for N <= n_exact: certified;
+    otherwise the best classical solver / long parallel tempering: best known) and, for every
+    annealing back-end, its best read and its best polished read. The best candidate is reported
+    with its reward R_N, energy H = -N (R_N - offset)/2, configuration (+/- per agent, sign fixed
+    so that agent 0 is +, since S and -S are equivalent), where it came from, whether it is
+    certified, and for each source whether it found it and how far (Hamming distance) its best
+    configuration is. Writes summary/ground_states.csv."""
+    labels = sorted(p.name for p in (out / "anneal").glob("*")) if (out / "anneal").exists() else []
+    rows = []
+    for key, eps, J0 in _classes(cfg):
+        for N in cfg.Ns:
+            cp = classical_path(out, key, N)
+            c = json.loads(cp.read_text()) if cp.exists() else None
+            if c is None and not any(anneal_path(out, l, key, N, 0).exists() for l in labels):
+                continue
+            J = ensure_instances(out, cfg, key, eps, J0, N)
+            for b in range(cfg.n_instances):
+                P = PlannerProblem(J[b])
+                cand = []                                    # (reward, spins, column, source)
+                if c is not None and c.get("ref_S"):
+                    cand.append((c["ref"][b], c["ref_S"][b], "classical", c["ref_source"][b]))
+                for lab in labels:
+                    ap = anneal_path(out, lab, key, N, b)
+                    if ap.exists():
+                        r = json.loads(ap.read_text())
+                        if r.get("best_S"):
+                            cand.append((r["best_reward"], r["best_S"], lab, lab))
+                        if r.get("polished_best_S"):
+                            cand.append((r["polished_best_reward"], r["polished_best_S"], lab + "+polish", lab + "+polish"))
+                if not cand:
+                    continue
+                top = max(t[0] for t in cand)                # ties (to rounding) go to the first source: classical/exact
+                best = next(t for t in cand if t[0] >= top - TOL * max(1, abs(top)))
+                g = _canonical(best[1])
+                S = np.array([1.0 if ch == "+" else -1.0 for ch in g])
+                certified = bool(c is not None and c.get("ref_exact") and c.get("ref_S"))
+                row = {"problem": key, "N": N, "instance": b, "reward": float(P.reward(S)),
+                       "energy": float(P.energy(S)), "ground_state": g, "found_by": best[3],
+                       "certified": certified, "status": "exact optimum" if certified else "best known"}
+                for rw, sp, col, _src in cand:
+                    row[f"{col}:found"] = bool(rw >= top - TOL * max(1, abs(top)))
+                    row[f"{col}:hamming"] = sum(x != y for x, y in zip(_canonical(sp), g))
+                rows.append(row)
+    if rows:
+        path = out / "summary" / "ground_states.csv"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        cols = []
+        for r in rows:
+            cols += [k for k in r if k not in cols]
+        with open(path, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=cols)
+            w.writeheader()
+            w.writerows(rows)
+        for r in rows:
+            log(f"[ground] {r['problem']:10s} N={r['N']:4d} i={r['instance']} R_N={r['reward']:.5f} "
+                f"H={r['energy']:9.4f} {r['status']:13s} by {r['found_by']:24s} {r['ground_state'] if r['N'] <= 40 else r['ground_state'][:40] + '...'}")
+        log(f"[ground] -> {path}")
+    else:
+        log("[ground] no results yet")
+    return rows
+
+
 def stage_analyze(out: Path, cfg: CampaignConfig, log=print, show=False) -> list[dict]:
     report_chain_breaks(out, cfg, log=log)                # works before the classical stage too
+    ground_states(out, cfg, log=lambda *a: None)
     rows = collect(out, cfg)
     if not rows:
         log("[analyze] nothing else to analyse yet: run the classical stage first")
@@ -911,6 +1008,8 @@ def main(argv=None) -> None:
     p.add_argument("--backend", nargs="+", help="default: every back-end of the config (qpu ones need the token)")
     p.add_argument("--solver")
     p = sub.add_parser("analyze", parents=[common], help="summary.csv and figures")
+    sub.add_parser("ground", parents=[common],
+                   help="ground state (best configuration) of every instance, its source, certified or not")
     sub.add_parser("chains", parents=[common],
                    help="broken chains per read and solution quality vs number of broken chains (no QPU)")
     a = ap.parse_args(argv)
@@ -963,6 +1062,8 @@ def main(argv=None) -> None:
         stage_analyze(out, cfg)
     elif a.cmd == "chains":
         report_chain_breaks(out, cfg)
+    elif a.cmd == "ground":
+        ground_states(out, cfg)
 
 
 if __name__ == "__main__":

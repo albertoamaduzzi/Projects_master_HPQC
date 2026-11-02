@@ -188,8 +188,8 @@ For each package: what it offers, then exactly how this project uses it.
 \item The chain-break method is chosen by name.
 \item \code{MinimizeEnergy} has to be wrapped in a named function, because \code{unembed_sampleset} reads \code{__name__}. Testing revealed this.
 \end{itemize}
-\src{skgame/optim/backends.py}{145}{150}{the keyword arguments for the physical sampler}
-\src{skgame/optim/backends.py}{209}{219}{chain-break resolution by name}
+\src{skgame/optim/backends.py}{147}{152}{the keyword arguments for the physical sampler}
+\src{skgame/optim/backends.py}{211}{221}{chain-break resolution by name}
 
 \subsection{\texorpdfstring{\code{dwave-samplers}}{dwave-samplers} and \texorpdfstring{\code{dwave-preprocessing}}{dwave-preprocessing}}
 \textbf{Capabilities.}
@@ -227,7 +227,7 @@ The campaign embeds explicitly (the steps of \code{FixedEmbeddingComposite}) rat
 %=====================================================================================
 \section{Life of one QPU call, line by line}
 %=====================================================================================
-\src{skgame/optim/backends.py}{152}{197}{\code{AnnealBackend.sample}: embed, sample, keep the physical reads, unembed}
+\src{skgame/optim/backends.py}{154}{199}{\code{AnnealBackend.sample}: embed, sample, keep the physical reads, unembed}
 What happens, in order:
 \begin{enumerate}
 \item \code{P.to_bqm()}: the SK problem as an Ising BQM.
@@ -240,7 +240,7 @@ What happens, in order:
 \item \code{sampleset_statistics} recomputes every reward from the spins: it is exact whatever scaling was applied. It aggregates identical reads, records \code{info["timing"]} (in $\mu$s) and the read-averaged chain-break fraction, and optionally polishes every distinct read with greedy descent.
 \item The embedding statistics, the chain strength actually used (from \code{embedding_context}) and $\max|W_{ij}|$ are added.
 \end{enumerate}
-\src{skgame/optim/backends.py}{222}{293}{statistics of a sample set, including the broken chains of every read}
+\src{skgame/optim/backends.py}{224}{295}{statistics of a sample set, including the broken chains of every read}
 
 \paragraph{The \code{seed} lesson.} Samplers differ in which arguments they accept. The QPU rejects unknown ones
 \emph{server-side}, so a Python \code{try/except TypeError} would never catch the error. Both wrappers therefore
@@ -257,8 +257,8 @@ pass \code{seed} only to samplers that declare it in \code{parameters}:
 \item The list of calls is built. $N$ above the largest clique is skipped; already-saved results are skipped (resume).
 \item \code{_estimate_qpu_time} computes, for each $N$, the clique embedding on the real graph and the number of qubits it uses, then evaluates \code{solver.estimate_qpu_access_time}: \textbf{a local formula, no QPU}.
 \end{enumerate}
-\src{main_simulation.py}{414}{429}{the \code{--check} estimate}
-\src{skgame/optim/backends.py}{199}{206}{one call's estimate from the solver's timing model}
+\src{main_simulation.py}{445}{458}{the \code{--check} estimate}
+\src{skgame/optim/backends.py}{201}{208}{one call's estimate from the solver's timing model}
 
 \paragraph{Your check (27 October).}
 \begin{table}[H]\centering\small
@@ -305,13 +305,13 @@ Above all, the time is \textbf{proportional to \code{num_reads}} apart from the 
 After each call the QPU returns its timing. \code{qpu_access_time} is what Leap charges. It is saved in every result
 file together with the level-2 estimate (\code{estimated_access_s}), and \code{qpu --spent} sums them and prints the ratio
 actual/estimate:
-\src{main_simulation.py}{396}{411}{\code{qpu --spent}: what was actually charged}
+\src{main_simulation.py}{427}{442}{\code{qpu --spent}: what was actually charged}
 
 %=====================================================================================
 \section{The budget guard: \texorpdfstring{\code{qpu --budget-seconds S}}{qpu --budget-seconds S}}
 %=====================================================================================
-\src{main_simulation.py}{312}{343}{budget object and per-call estimate}
-\src{main_simulation.py}{346}{394}{the anneal stage: guard before every call, real charge after it}
+\src{main_simulation.py}{331}{362}{budget object and per-call estimate}
+\src{main_simulation.py}{377}{424}{the anneal stage: guard before every call, real charge after it}
 Rule: before each call, with $\hat t$ the level-2 estimate,
 \begin{equation}
 \text{call allowed}\iff t_{\rm spent}+f\,\hat t\le S,\qquad f=\max\big(1.5,\ 1.1\cdot\max_{\rm past\ calls}t_{\rm actual}/\hat t\big).
@@ -342,8 +342,23 @@ Leap project. The Leap dashboard remains the authority on what is left.
 A chain of spin $i$ is \emph{broken} in a read when its qubits do not all agree. Its logical value is then decided by the chain-break method (majority vote by default). The fraction D-Wave reports, \code{chain_break_fraction}, is exactly (broken chains)/$N$, and the code checks this.
 
 \paragraph{Analysis.} \code{python main_simulation.py chains --out DIR} (also run by \code{analyze}, and usable before the classical stage) writes \code{summary/chain_breaks.csv} and \code{chain_breaks.png}. For each back-end, $N$ and number of broken chains $k$ they give the fraction of reads, the success probability, and the mean residual, raw and after polishing. The reference is the exact or classical optimum when available, otherwise the best read seen.
-\src{main_simulation.py}{674}{729}{solution quality vs number of broken chains}
+\src{main_simulation.py}{705}{760}{solution quality vs number of broken chains}
 \paragraph{Example (classical simulator, deliberately weak chains $p=0.5$).} At $N=16$ on Pegasus, 70\% of the reads have no broken chain and hit the optimum in 88\% of cases. Reads with one or more broken chains never do, raw. Greedy polishing brings those with 1--2 broken chains back to 84--96\%. The residual grows almost linearly with the number of broken chains. On the real QPU, with the default $p=1.414$, the test of 27 October had chain-break fractions of 0 and 0.001 at $N\le16$.
+
+%=====================================================================================
+\section{Ground states}
+%=====================================================================================
+\code{python main_simulation.py ground --out DIR} (also run by \code{analyze}) writes \code{summary/ground_states.csv}. For every instance it gives:
+\begin{itemize}
+\item the best configuration found (a string of $+$/$-$, one per agent), with the sign fixed so that agent 0 is $+$, since $S$ and $-S$ have the same energy;
+\item its reward $R_N$ and its energy $H=-\tfrac{N}{2}(R_N-\text{offset})$;
+\item where it came from, and whether it is \textbf{certified} (exact enumeration, $N\le24$) or only \textbf{best known};
+\item for every source (classical reference, each annealer raw and polished) whether that source found it, and its Hamming distance from it.
+\end{itemize}
+The classical stage now saves the reference \emph{configuration} (\code{ref_S}, \code{ref_source}) and not only its value. Each QPU result file already holds \code{best_S} and \code{polished_best_S}.
+\src{main_simulation.py}{832}{894}{the ground-state report}
+
+\paragraph{When the QPU's graph changes.} A QPU's working graph changes over time as qubits and couplers go offline or come back. On 2 November the Zephyr chip's largest clique was 105, against 104 on 27 October. An embedding cached on an earlier day may then contain a chain that is no longer connected (\code{DisconnectedChainError}). \code{EmbeddingCache.get} therefore re-validates every cached embedding against the current graph (\code{is_valid_embedding}), recomputes it if it no longer fits, and keeps the old file as \code{N....stale.json}. Errors in the embedding or the problem are no longer retried (\code{_transient}), and they occur before any QPU time is used.
 
 %=====================================================================================
 \section{Ising or QUBO? And is the problem trivial?}
@@ -366,7 +381,7 @@ What \emph{is} trivial is the 1-second test: $N=8,16$ is solved exactly by a lap
 %=====================================================================================
 \section{From reads to results}
 %=====================================================================================
-\src{main_simulation.py}{467}{498}{per back-end metrics in \code{collect}}
+\src{main_simulation.py}{498}{528}{per back-end metrics in \code{collect}}
 For each problem class, $N$ and instance $b$, with reference $R_{\rm ref}$ (exact for $N\le24$; otherwise the best of the classical solvers and of every annealer read, polished reads included):
 \begin{align}
 p_{\rm success}&=\frac{\#\{\text{reads with }R\ge R_{\rm ref}-10^{-9}\}}{n_{\rm reads}}\quad\text{(per read)},\\
@@ -374,7 +389,7 @@ p_{\rm success}&=\frac{\#\{\text{reads with }R\ge R_{\rm ref}-10^{-9}\}}{n_{\rm 
 t_{\rm read}&=\frac{t_{\rm sampling}}{n_{\rm reads}}\quad(t_{\rm sampling}=\text{\code{qpu_sampling_time}}),\\
 \text{TTS}_{99}&=t_{\rm read}\,\frac{\ln0.01}{\ln(1-p)}.
 \end{align}
-\src{main_simulation.py}{517}{532}{time per read and TTS$_{99}$}
+\src{main_simulation.py}{548}{563}{time per read and TTS$_{99}$}
 \code{compare_backends} ranks the back-ends of the same device for each (class, $N$): higher median $p_{\rm success}$ wins, ties go to the lower residual.
 The output is \code{summary/backend_comparison.csv} and \code{.png}.
 

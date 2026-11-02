@@ -96,3 +96,29 @@ def test_per_read_broken_chains_are_recorded(tmp_path, method):
         assert max(t["n_broken"]) == max(hist) and r["info"]["discarded_reads"] == 0
         assert r["info"]["chain_break_fraction_mean"] == pytest.approx(
             sum(k * v for k, v in hist.items()) / (120 * 20))
+
+
+def test_stale_cached_embedding_is_recomputed(tmp_path):
+    """The QPU graph changes over time: a cached embedding that no longer fits is replaced."""
+    G = SMALL["zephyr"].ideal_graph()
+    cache = EmbeddingCache(tmp_path)
+    old = cache.get("qpu", CliqueEmbedding(), 12, G)
+    chain = next(c for c in old.values() if len(c) > 1)
+    H = G.copy()
+    H.remove_edge(chain[0], next(q for q in chain[1:] if G.has_edge(chain[0], q)))   # a coupler goes offline
+    assert not is_valid_embedding(old, 12, H)
+    new = cache.get("qpu", CliqueEmbedding(), 12, H)
+    assert cache.last_status.startswith("recomputed") and is_valid_embedding(new, 12, H)
+    assert cache.path("qpu", "clique", 12).with_name("N0012.stale.json").exists()
+    assert cache.get("qpu", CliqueEmbedding(), 12, H) == new and cache.last_status == "cached"
+
+
+def test_embedding_errors_are_not_retried():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import main_simulation as ms
+    from minorminer.utils.exceptions import DisconnectedChainError
+    assert not ms._transient(DisconnectedChainError(5))
+    assert not ms._transient(ValueError("bad"))
+    assert ms._transient(ConnectionError("network"))
