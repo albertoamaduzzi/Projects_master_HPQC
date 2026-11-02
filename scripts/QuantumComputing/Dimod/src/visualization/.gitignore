@@ -4,3 +4,4 @@ __pycache__/
 *.toc
 *.out
 explanation_project/*.pdf
+explanation_project/code_ranges.tex

@@ -405,7 +405,8 @@ def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys
         P = PlannerProblem(J[b])
         for attempt in range(retries + 1):
             try:
-                res = be.sample(P, rng=np.random.SeedSequence([cfg.seed, 3, N, b]))
+                res = be.sample(P, rng=np.random.SeedSequence([cfg.seed, 3, N, b]),
+                                label=f"skgame {out.name} {be.label} {key} N={N} i={b}")
                 break
             except Exception as exc:                     # network hiccups, solver busy, ...
                 if attempt == retries or not _transient(exc):
@@ -414,6 +415,12 @@ def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys
                 time.sleep(2 ** (attempt + 1))
         res.update(key=key, eps=eps, J0=J0, N=N, instance=b, backend=be.spec)
         res["info"]["estimated_access_s"] = est
+        phys = res.pop("_physical", None)
+        if phys is not None:                     # the exact physical problem sent (before auto_scale)
+            pp = anneal_path(out, be.label, key, N, b).with_name(f"N{N:04d}_i{b}_physical.npz")
+            pp.parent.mkdir(parents=True, exist_ok=True)
+            np.savez_compressed(pp, **phys)
+            res["info"]["physical_problem_file"] = pp.name
         _write_json(anneal_path(out, be.label, key, N, b), res)
         acc = res["info"].get("timing_us", {}).get("qpu_access_time", 0.0) / 1e6
         budget.charge(acc if acc > 0 else est, est)
@@ -894,6 +901,162 @@ def ground_states(out: Path, cfg: CampaignConfig, log=print) -> list[dict]:
     return rows
 
 
+def validate(out: Path, cfg: CampaignConfig, log=print) -> dict:
+    """Re-derive every stored number from the stored inputs, a posteriori.
+
+    For each annealer result: rebuild the instance from instances/*.npz and recompute the reward of
+    every stored configuration (reads.S, best_S, polished_best_S); check read counts, the broken-
+    chain histogram against D-Wave's chain_break_fraction, the chain strength against
+    p * J_rms * sqrt(N-1), the embedding_used (valid minor of K_N on the ideal graph of the
+    topology, which contains every working graph) and its chain lengths. For each classical
+    file: recompute the reward of the reference configuration and, for N <= n_exact, re-run the
+    exact enumeration. Returns {check: [passed, failed]}."""
+    from skgame.optim.embedding import is_valid_embedding, topology as topo
+    from skgame.optim.backends import parse_spec
+    tally = {}
+
+    def check(name, ok, detail=""):
+        t = tally.setdefault(name, [0, 0])
+        t[0 if ok else 1] += 1
+        if not ok:
+            log(f"[validate] FAILED {name}: {detail}")
+
+    def close(a, b):
+        return abs(a - b) <= 1e-9 * max(1.0, abs(b))
+
+    graphs = {}
+    for key, eps, J0 in _classes(cfg):
+        for N in cfg.Ns:
+            if not instance_path(out, key, N).exists():
+                continue
+            J = ensure_instances(out, cfg, key, eps, J0, N)
+            cp = classical_path(out, key, N)
+            if cp.exists():
+                c = json.loads(cp.read_text())
+                for b in range(cfg.n_instances):
+                    P = PlannerProblem(J[b])
+                    if c.get("ref_S"):
+                        S = np.array([1.0 if ch == "+" else -1.0 for ch in c["ref_S"][b]])
+                        check("classical reference configuration -> reference value", close(P.reward(S), c["ref"][b]),
+                              f"{key} N={N} i={b}")
+                    if c["ref_exact"] and N <= 24:
+                        check("exact optimum re-computed", close(ExactEnumeration(max_N=24).solve(P).reward, c["ref"][b]),
+                              f"{key} N={N} i={b}")
+            for lab in sorted(p.name for p in (out / "anneal").glob("*")) if (out / "anneal").exists() else []:
+                for b in range(cfg.n_instances):
+                    ap = anneal_path(out, lab, key, N, b)
+                    if not ap.exists():
+                        continue
+                    r = json.loads(ap.read_text())
+                    info, P, where = r["info"], PlannerProblem(J[b]), f"{lab} {key} N={N} i={b}"
+                    to_S = lambda st: np.array([1.0 if ch == "+" else -1.0 for ch in st])
+                    if r.get("best_S"):
+                        check("best configuration -> best reward", close(P.reward(to_S(r["best_S"])), r["best_reward"]), where)
+                    if r.get("polished_best_S"):
+                        check("polished configuration -> polished reward",
+                              close(P.reward(to_S(r["polished_best_S"])), r["polished_best_reward"]), where)
+                    t = r.get("reads")
+                    if t and t.get("S"):
+                        rec = np.atleast_1d(P.reward(np.array([to_S(x) for x in t["S"]]))) if t["S"] else np.zeros(0)
+                        check("every stored configuration -> its reward", np.allclose(rec, t["reward"], rtol=1e-9, atol=1e-12), where)
+                    if t:
+                        check("read counts add up", sum(t["count"]) == info["num_reads"] - info.get("discarded_reads", 0)
+                              or sum(t["count"]) == info["num_reads"], where)
+                    h = info.get("broken_chains_hist")
+                    if h and "chain_break_fraction_mean" in info and not info.get("discarded_reads"):
+                        mean = sum(int(k) * v for k, v in h.items()) / max(1, sum(h.values())) / N
+                        check("broken-chain counts agree with D-Wave's chain_break_fraction",
+                              abs(mean - info["chain_break_fraction_mean"]) < 1e-9, where)
+                    if info.get("chain_strength") is not None:
+                        q = P.W[np.triu_indices(N, 1)]
+                        expect = info["settings"]["chain_strength_prefactor"] * np.sqrt(np.mean(q ** 2)) * np.sqrt(N - 1)
+                        check("chain strength = p J_rms sqrt(N-1)", close(info["chain_strength"], expect), where)
+                    pf = ap.with_name(info["physical_problem_file"]) if info.get("physical_problem_file") else None
+                    if pf is not None and pf.exists() and info.get("embedding_used"):
+                        import dimod
+                        from dwave.embedding import EmbeddedStructure
+                        ph = np.load(pf)
+                        emb = {int(k): v for k, v in info["embedding_used"].items()}
+                        edges = list(zip(ph["u"].tolist(), ph["v"].tolist()))
+                        rebuilt = EmbeddedStructure(edges, emb).embed_bqm(P.to_bqm(), chain_strength=info["chain_strength"],
+                                                                          smear_vartype=dimod.SPIN)
+                        saved = dimod.BinaryQuadraticModel(dict(zip(ph["h_q"].tolist(), ph["h"].tolist())),
+                                                           dict(zip(edges, ph["J"].tolist())), float(ph["offset"]), "SPIN")
+                        check("physical problem = embed(instance, embedding_used, chain_strength)",
+                              rebuilt.is_almost_equal(saved), where)
+                        check("auto_scale divisor = max |J| of the physical problem",
+                              close(float(np.abs(ph["J"]).max()), info["programmed"]["max_abs_J_before_scaling"]), where)
+                    if info.get("embedding_used"):
+                        emb = {int(k): v for k, v in info["embedding_used"].items()}
+                        t = (info.get("solver_properties") or {}).get("topology") or {}
+                        tp = t.get("type") or parse_spec(info["backend"])[1]
+                        shape = tuple(t["shape"]) if t.get("shape") else topo(tp).shape
+                        from skgame.optim.embedding import Topology
+                        G = graphs.setdefault((tp, shape), Topology(tp, shape, "").ideal_graph())
+                        check("embedding is a valid minor of K_N", is_valid_embedding(emb, N, G), where)
+                        check("chain lengths match the embedding", [len(emb[i]) for i in range(N)] == info["chain_lengths"], where)
+    for name, (ok, bad) in tally.items():
+        log(f"[validate] {'OK  ' if not bad else 'FAIL'} {name}: {ok} passed, {bad} failed")
+    if not tally:
+        log("[validate] nothing to validate yet")
+    return tally
+
+
+def scan_summary(dirs, log=print) -> list[dict]:
+    """Compare campaigns that differ only in the annealing settings (e.g. one directory per chain-
+    strength prefactor, same instances). The reference for each instance is the best configuration
+    seen in ANY of the directories (plus the classical/exact one if present), so success rates are
+    comparable across settings. Writes scan_summary.csv next to the first directory."""
+    runs = []
+    for d in map(Path, dirs):
+        cfg = load_config(d)
+        for f in sorted((d / "anneal").glob("*/*/*.json")) if (d / "anneal").exists() else []:
+            r = json.loads(f.read_text())
+            runs.append((d, cfg, f.parent.parent.name, r))
+    ref = {}
+    for d, cfg, lab, r in runs:
+        k = (r["key"], r["N"], r["instance"])
+        ref[k] = max(ref.get(k, -INF), r["best_reward"], r.get("polished_best_reward", -INF))
+        cp = classical_path(d, r["key"], r["N"])
+        if cp.exists():
+            ref[k] = max(ref[k], json.loads(cp.read_text())["ref"][r["instance"]])
+    groups = {}
+    for d, cfg, lab, r in runs:
+        g = groups.setdefault((str(d), cfg.chain_strength_prefactor, cfg.chain_break_method, cfg.annealing_time,
+                               cfg.num_reads, lab, r["N"]), {"calls": 0, "reads": 0, "succ": 0, "succ_p": 0,
+                                                            "broken": 0.0, "zero": 0, "res": []})
+        k = (r["key"], r["N"], r["instance"])
+        cnt = np.array(r["counts"])
+        g["calls"] += 1
+        g["reads"] += cnt.sum()
+        g["succ"] += cnt[_success(r["rewards"], ref[k])].sum() if len(cnt) else 0
+        if r.get("polished_counts"):
+            pc = np.array(r["polished_counts"])
+            g["succ_p"] += pc[_success(r["polished_rewards"], ref[k])].sum()
+        h = r["info"].get("broken_chains_hist") or {}
+        g["broken"] += sum(int(a) * b for a, b in h.items())
+        g["zero"] += h.get("0", 0)
+        g["res"].append((ref[k] - r["best_reward"]) / abs(ref[k]))
+    rows = []
+    for (d, pf, cbm, ta, nr, lab, N), g in sorted(groups.items(), key=lambda t: (t[0][5], t[0][6], t[0][1])):
+        n = max(1, g["reads"])
+        rows.append({"dir": d, "prefactor": pf, "chain_break_method": cbm, "annealing_time": ta, "num_reads": nr,
+                     "backend": lab, "N": N, "calls": g["calls"], "p_success": g["succ"] / n,
+                     "p_success_polished": g["succ_p"] / n, "mean_broken_chains": g["broken"] / n,
+                     "frac_reads_no_break": g["zero"] / n, "residual_best_median": float(np.median(g["res"]))})
+        log(f"[scan] {lab:20s} N={N:4d} p={pf:<6g} {cbm:15s} ta={ta:<5g} P(succ)={rows[-1]['p_success']:.3f} "
+            f"polished={rows[-1]['p_success_polished']:.3f} broken/read={rows[-1]['mean_broken_chains']:.3f} "
+            f"no-break={rows[-1]['frac_reads_no_break']:.1%}")
+    if rows:
+        path = Path(dirs[0]).parent / "scan_summary.csv"
+        with open(path, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(rows[0]))
+            w.writeheader()
+            w.writerows(rows)
+        log(f"[scan] -> {path}")
+    return rows
+
+
 def stage_analyze(out: Path, cfg: CampaignConfig, log=print, show=False) -> list[dict]:
     report_chain_breaks(out, cfg, log=log)                # works before the classical stage too
     ground_states(out, cfg, log=lambda *a: None)
@@ -1008,12 +1171,19 @@ def main(argv=None) -> None:
     p.add_argument("--backend", nargs="+", help="default: every back-end of the config (qpu ones need the token)")
     p.add_argument("--solver")
     p = sub.add_parser("analyze", parents=[common], help="summary.csv and figures")
+    p = sub.add_parser("scan-summary", help="compare campaigns differing only in annealing settings (no QPU)")
+    p.add_argument("--dirs", nargs="+", required=True, type=Path)
+    sub.add_parser("validate", parents=[common],
+                   help="recompute every stored number from the stored inputs (no QPU)")
     sub.add_parser("ground", parents=[common],
                    help="ground state (best configuration) of every instance, its source, certified or not")
     sub.add_parser("chains", parents=[common],
                    help="broken chains per read and solution quality vs number of broken chains (no QPU)")
     a = ap.parse_args(argv)
 
+    if a.cmd == "scan-summary":
+        scan_summary(a.dirs)
+        return
     out = a.out
     if a.cmd == "init":
         if (out / "config.json").exists() and not a.force:
@@ -1064,6 +1234,8 @@ def main(argv=None) -> None:
         report_chain_breaks(out, cfg)
     elif a.cmd == "ground":
         ground_states(out, cfg)
+    elif a.cmd == "validate":
+        validate(out, cfg)
 
 
 if __name__ == "__main__":
