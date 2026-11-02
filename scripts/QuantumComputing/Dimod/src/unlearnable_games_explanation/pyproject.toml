@@ -19,7 +19,7 @@ nb = ["jupyter", "nbconvert", "ipykernel"]
 skgame = "skgame.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["skgame*"]
+include = ["skgame*", "dwave_utils*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

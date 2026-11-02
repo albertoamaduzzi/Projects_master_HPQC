@@ -82,7 +82,7 @@ def budget(out: Path, cfg, total: float = 178.0, fill: bool = False, margin: flo
     `total` = QPU seconds you had when this campaign started (keep the same value at every step:
     what the campaign has already spent is read from its own results and subtracted)."""
     import main_simulation as ms
-    import coupling_scan as cs
+    from dwave_utils import coupling_scan as cs
     bes = _qpu_backends(out, cfg)
     for be in bes:
         lim = be.largest_problem()
@@ -132,8 +132,7 @@ def budget(out: Path, cfg, total: float = 178.0, fill: bool = False, margin: flo
             cost = run_fixed + reads * run_per_read
             log(f"[budget] --fill: {reads} reads per call -> run {cost:.1f} s, leaving {left - cal_left - cost:.1f} s "
                 f"(margin {margin:g} s; max {max_call_reads} reads fit in one call's 1 s limit)")
-            cfg.num_reads = reads
-            ms.save_config(out, cfg)
+            ms.update_config(out, cfg, num_reads=reads)
             log(f"[budget] num_reads = {reads} stored in {out / 'config.json'}")
             res["num_reads"] = reads
     return res
@@ -156,7 +155,7 @@ def calibrate(out: Path, cfg, budget_s: float | None = None, check: bool = False
     topology and N. Measured on one class (default the pure SK one): adaptive climb of GRID, 200 reads,
     instance 0. Stored in config.json as chain_strength_by_N; any per-class table is removed."""
     import main_simulation as ms
-    import coupling_scan as cs
+    from dwave_utils import coupling_scan as cs
     key = calibration_class(cfg, key)
     log(f"[calibrate] shared calibration per (machine, N), measured on problem class {key}")
     cs.find_best_coupling_per_problem(out, cfg, cfg.Ns, prefactors=GRID, num_reads=CAL_READS, keys=[key],
@@ -164,12 +163,8 @@ def calibrate(out: Path, cfg, budget_s: float | None = None, check: bool = False
                                       check_only=check, apply=True, adaptive=True, log=log)
     if check:
         return {}
-    cfg2 = ms.load_config(out)
-    best = (cfg2.chain_strength_by_class or {}).get(key) or {}
-    cfg2.chain_strength_by_N = best
-    cfg2.chain_strength_by_class = {}
-    cfg2.calibration_class = key
-    ms.save_config(out, cfg2)
+    best = (ms.load_config(out).chain_strength_by_class or {}).get(key) or {}
+    ms.update_config(out, cfg, chain_strength_by_N=best, chain_strength_by_class={}, calibration_class=key)
     if best:
         _write_table(out, {key: best}, log)
     return best
