@@ -1,6 +1,6 @@
 """python -m dwave_utils <command> [options]: the D-Wave commands of main_simulation.py.
 
-Commands: feasibility, budget, calibrate, run, report, compare, shim, coupling-scan.
+Commands: feasibility, noise-fit, budget, calibrate, run, report, compare, shim, coupling-scan.
 Options are those of `python main_simulation.py <command> --help`.
 """
 import sys

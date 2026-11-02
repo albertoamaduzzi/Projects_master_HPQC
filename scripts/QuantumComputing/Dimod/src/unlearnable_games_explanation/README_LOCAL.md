@@ -23,7 +23,7 @@ cd Projects_master_HPQC/scripts/QuantumComputing/Dimod/src/unlearnable_games_exp
 ## 2. Environment (once)
 
 ```bash
-bash local/setup_env.sh               # creates .venv, installs cineca/requirements.txt, runs the 125 tests
+bash local/setup_env.sh               # creates .venv, installs cineca/requirements.txt, runs the 128 tests
 WITH_NB=1 bash local/setup_env.sh     # alternatively: + Jupyter, for the notebook
 source .venv/bin/activate             # in every new terminal
 ```
@@ -50,6 +50,7 @@ The D-Wave tools live in the package **`dwave_utils/`**:
 | `dwave_utils/pipeline.py` | the QPU pipeline: budget → calibrate → run → report → compare | `budget`, `calibrate`, `run`, `report`, `compare` |
 | `dwave_utils/coupling_scan.py` | the chain-strength scan behind `calibrate` | `coupling-scan` |
 | `dwave_utils/shimming.py` | flux-bias shimming of a QPU | `shim` |
+| `dwave_utils/noise_fit.py` | σ and β_eff measured from the QPU's own small-N reads | `noise-fit` |
 
 Every command can be launched in two equivalent ways:
 ```powershell
@@ -169,6 +170,16 @@ python -m dwave_utils coupling-scan --out $F --Ns 8:48:8 104 --budget-seconds 7
 python -m dwave_utils coupling-scan --out $F --summary-only        # recompute the choice from saved results
 ```
 
+### 4.6b Measure the machine: σ and β_eff (no QPU)
+After a run that includes small N (N = 8 is enough; N ≤ 12 is used by default), fit the control error σ and the effective inverse temperature β_eff of each machine from its own reads, then use them in the feasibility check:
+```powershell
+python -m dwave_utils noise-fit   --out $F                       # -> results\sk\calibration\noise_fit.json, noise_fit.png
+python -m dwave_utils noise-fit   --out $F --max-N 16            # also N = 16 (slower: minutes per call)
+python -m dwave_utils feasibility --topology zephyr  --N 16 64 104 --from-fit $F
+python -m dwave_utils feasibility --topology pegasus --N 16 64 104 160 --from-fit $F
+```
+It uses only reads with no broken chain (`--include-broken` to use all of them). The model and its limits are in the docstring of `dwave_utils/noise_fit.py`.
+
 ### 4.7 From Python (notebook)
 ```python
 import dwave_utils as du
@@ -181,6 +192,9 @@ du.run(out, cfg, budget_s=du.left(out, total=178))
 rows = du.report(out, cfg)
 rows = du.compare(out, cfg)
 du.shim(out, cfg, "qpu:zephyr:clique", N=104, iterations=30)
+du.fit_noise(out, cfg)                                   # sigma, beta_eff per machine
+m = du.load_fit(out, "zephyr")
+du.check_feasibility("zephyr", [16, 64, 104], sigma=m["sigma"], beta=m["beta_eff"])
 ```
 The submodules stay importable as well: `from dwave_utils import pipeline, coupling_scan, feasibility, shimming`.
 
@@ -194,6 +208,14 @@ python main_simulation.py analyze --out $F          # summary.csv and figures
 python main_simulation.py plan --out $F             # sizes, classes, p used for each N
 ```
 Every field these files contain is described in [RESULTS_FORMAT.md](RESULTS_FORMAT.md). If a QPU's working graph has changed since the embeddings were cached, the code re-checks each cached embedding and recomputes it before using any QPU time.
+
+### 4.9 If a run stops
+
+Every step is resumable. Rerun the **same command** and it continues: finished calls are saved and never repeated, so no QPU time is spent twice. `python -m dwave_utils run --out $F --check` shows what is left and its cost.
+
+**`PermissionError: [WinError 5] ... busclique ... .lru~ -> .lru` (Windows).** minorminer's clique cache in `.venv\data` was locked by OneDrive or an antivirus. The current code retries and then falls back to computing without the cache, so this no longer stops a run; see §12 of [`../../LESSONS_all_to_all_annealing.md`](../../LESSONS_all_to_all_annealing.md). To avoid it altogether, pause OneDrive during runs, or keep the repository and `.venv` outside OneDrive. If a stale `.lru~` file is left in `.venv\data\busclique_7\clique\`, delete it.
+
+**`Unlink of file ... failed. Should I try again?` (git on Windows).** The file is open, for example a PDF in a viewer, or being synced. Close it and answer `y`.
 
 ## 5. Look at the results
 

@@ -37,6 +37,11 @@ SPECS = {
     "Validate": (M, r"^def validate", None),
     "Choose": ("dwave_utils/coupling_scan.py", r"^def choose_coupling", None),
     "Interp": ("dwave_utils/coupling_scan.py", r"^def coupling_for", None),
+    "Prefor": ("dwave_utils/coupling_scan.py", r"^def prefactor_for", None),
+    "Calib": ("dwave_utils/pipeline.py", r"^def calibrate", None),
+    "Missing": ("dwave_utils/pipeline.py", r"^def missing_calibration", None),
+    "Assess": ("dwave_utils/feasibility.py", r"^def assess", None),
+    "Loglik": ("dwave_utils/noise_fit.py", r"^def call_loglik", None),
 }
 
 

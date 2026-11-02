@@ -122,3 +122,31 @@ def test_embedding_errors_are_not_retried():
     assert not ms._transient(DisconnectedChainError(5))
     assert not ms._transient(ValueError("bad"))
     assert ms._transient(ConnectionError("network"))
+
+
+def test_clique_cache_lock_falls_back(monkeypatch):
+    """A locked minorminer cache file (Windows/OneDrive) must not stop the run."""
+    import minorminer.busclique as bc
+    from skgame.optim import embedding as em
+    g = em._graphs().zephyr_graph(2, 4)
+    expected = len(bc.busgraph_cache(g).largest_clique())
+    real = bc.find_clique_embedding
+
+    class Locked:
+        def __init__(self, *a, **k):
+            raise PermissionError("[WinError 5] access denied: .lru~ -> .lru")
+
+    def flaky(N, target, use_cache=True):
+        if use_cache:
+            raise PermissionError("locked")
+        return real(N, target, use_cache=False)
+    with monkeypatch.context() as m:                 # largest clique: the cache class itself is locked
+        m.setattr(bc, "busgraph_cache", Locked)
+        m.setattr(em.CliqueEmbedding, "_max_size_memo", {})
+        m.setattr(em.time, "sleep", lambda s: None)
+        assert em.CliqueEmbedding().max_size(g) == expected
+    with monkeypatch.context() as m:                 # embedding: the cached lookup fails, the uncached one works
+        m.setattr(bc, "find_clique_embedding", flaky)
+        m.setattr(em.time, "sleep", lambda s: None)
+        emb = em.CliqueEmbedding().embed(6, g)
+        assert len(emb) == 6 and em.is_valid_embedding(emb, 6, g)

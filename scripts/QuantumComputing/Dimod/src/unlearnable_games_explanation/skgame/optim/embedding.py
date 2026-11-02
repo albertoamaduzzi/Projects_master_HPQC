@@ -23,6 +23,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 
+import time
+
 import numpy as np
 
 
@@ -104,15 +106,70 @@ class CliqueEmbedding(EmbeddingStrategy):
     This is what DWaveCliqueSampler uses internally."""
 
     name = "clique"
+    _max_size_memo: dict = {}
 
     def embed(self, N, target):
         from minorminer.busclique import find_clique_embedding
-        emb = find_clique_embedding(N, target, use_cache=True)
+        emb = _with_disk_cache(lambda: find_clique_embedding(N, target, use_cache=True),
+                               lambda: _clique_no_cache(N, target))
         return {int(k): [int(q) for q in v] for k, v in emb.items()}
 
     def max_size(self, target):
+        """Largest K_N of `target`, remembered in memory: the disk cache is read once per graph."""
         from minorminer.busclique import busgraph_cache
-        return len(busgraph_cache(target).largest_clique())
+        key = _graph_key(target)
+        if key not in self._max_size_memo:
+            self._max_size_memo[key] = _with_disk_cache(lambda: len(busgraph_cache(target).largest_clique()),
+                                                        lambda: _largest_clique_no_cache(target))
+        return self._max_size_memo[key]
+
+
+def _graph_key(g) -> tuple:
+    return (g.number_of_nodes(), g.number_of_edges(), hash(frozenset(g.nodes())), hash(frozenset(map(frozenset, g.edges()))))
+
+
+def _with_disk_cache(cached, uncached, retries: int = 4):
+    """minorminer keeps its clique cache in files (inside the virtual environment). On Windows a synced
+    folder (OneDrive), an antivirus or a second process can lock them: PermissionError on the rename of
+    `.lru~`. Retry with back-off, then compute without the disk cache (slower, same result)."""
+    for attempt in range(retries):
+        try:
+            return cached()
+        except OSError as exc:
+            wait = 0.5 * 2 ** attempt
+            print(f"[embedding] clique cache locked ({type(exc).__name__}: {exc}); retry in {wait:g}s")
+            time.sleep(wait)
+    print("[embedding] clique cache still locked: computing without it")
+    return uncached()
+
+
+SMALLEST_UNCACHED = 12   # minorminer 0.2.22 aborts (std::bad_alloc) on uncached cliques of N <= 8
+
+
+def _clique_no_cache(N: int, target) -> dict:
+    """Clique embedding without the disk cache. For small N it embeds K_12 and keeps the first N chains:
+    still a valid embedding of K_N (every chain connected, every pair of chains adjacent)."""
+    from minorminer.busclique import find_clique_embedding
+    M = max(N, SMALLEST_UNCACHED)
+    emb = find_clique_embedding(M, target, use_cache=False)
+    return {i: emb[i] for i in range(N)} if emb else {}
+
+
+def _largest_clique_no_cache(target) -> int:
+    """Largest N with a clique embedding, by bisection, without minorminer's disk cache."""
+    from minorminer.busclique import find_clique_embedding
+    # a clique of N needs about N^2 / 6 qubits or more on D-Wave graphs: N <= sqrt(8 n) is a safe bound
+    # (asking minorminer for impossible sizes is slow and memory-hungry)
+    if not find_clique_embedding(SMALLEST_UNCACHED, target, use_cache=False):
+        return 0
+    lo, hi = SMALLEST_UNCACHED, int(np.sqrt(8 * target.number_of_nodes())) + 1
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if find_clique_embedding(mid, target, use_cache=False):
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo
 
 
 class HeuristicEmbedding(EmbeddingStrategy):
