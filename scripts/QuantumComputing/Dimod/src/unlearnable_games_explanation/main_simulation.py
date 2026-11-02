@@ -138,6 +138,16 @@ def _json_default(x):
     raise TypeError(type(x))
 
 
+def _spins(S) -> str:
+    """Configuration as a string of + and - (agent 0 first)."""
+    return "".join("+" if x > 0 else "-" for x in np.asarray(S).ravel())
+
+
+def _canonical(spins: str) -> str:
+    """S and -S have the same energy (no field): fix the sign so that agent 0 plays +."""
+    return spins if not spins or spins[0] == "+" else spins.translate(str.maketrans("+-", "-+"))
+
+
 def _nan_to_none(x):
     return None if x is None or (isinstance(x, float) and not math.isfinite(x)) else x
 
@@ -220,26 +230,35 @@ def stage_classical(out: Path, cfg: CampaignConfig, keys=None, log=print) -> Non
             J = ensure_instances(out, cfg, key, eps, J0, N)
             if not classical_path(out, key, N).exists():
                 rng = np.random.default_rng(np.random.SeedSequence([cfg.seed, 1, ci, N]))
-                rec = {"key": key, "eps": eps, "J0": J0, "N": N, "ref": [], "ref_exact": N <= cfg.n_exact,
+                rec = {"key": key, "eps": eps, "J0": J0, "N": N, "ref": [], "ref_S": [], "ref_source": [],
+                       "ref_exact": N <= cfg.n_exact,
                        "solvers": {s.name: {"reward": [], "seconds": []} for s in solvers},
                        "upper_bound": []}
                 for b in range(cfg.n_instances):
                     P = PlannerProblem(J[b])
                     ub = np.nan
+                    best, best_S, best_src = -INF, None, None
                     for s in solvers:
                         for _ in range(cfg.n_runs):
                             o = s.solve(P, rng.integers(2**63))
                             rec["solvers"][s.name]["reward"].append(o.reward)
                             rec["solvers"][s.name]["seconds"].append(o.seconds)
                             ub = np.fmin(ub, o.info.get("upper_bound_reward", np.nan))
-                    best = max(v["reward"][-1 - r] for v in rec["solvers"].values() for r in range(cfg.n_runs))
+                            if o.reward > best:
+                                best, best_S, best_src = o.reward, o.S, s.name
                     if rec["ref_exact"]:
-                        ref = exact.solve(P).reward
-                        assert best <= ref + TOL * max(1, abs(ref)), "a heuristic beat the exact optimum"
+                        ex = exact.solve(P)
+                        assert best <= ex.reward + TOL * max(1, abs(ex.reward)), "a heuristic beat the exact optimum"
+                        ref, ref_S, src = ex.reward, ex.S, "exact"
                     else:
-                        ref = max([best] + [reference.solve(P, rng.integers(2**63)).reward
-                                            for _ in range(cfg.ref_restarts)])
+                        ref, ref_S, src = best, best_S, best_src
+                        for _ in range(cfg.ref_restarts):
+                            o = reference.solve(P, rng.integers(2**63))
+                            if o.reward > ref:
+                                ref, ref_S, src = o.reward, o.S, "reference_pt"
                     rec["ref"].append(ref)
+                    rec["ref_S"].append(_spins(ref_S))
+                    rec["ref_source"].append(src)
                     rec["upper_bound"].append(_nan_to_none(float(ub)))
                 for v in rec["solvers"].values():          # (instance, run) layout
                     v["reward"] = np.reshape(v["reward"], (cfg.n_instances, cfg.n_runs)).tolist()
@@ -343,6 +362,18 @@ def _call_estimate(be, N: int, cfg: CampaignConfig) -> float:
     return float(est)
 
 
+def _transient(exc: Exception) -> bool:
+    """Worth retrying? Network / service problems yes; errors in the problem or the embedding
+    (they would fail identically every time, and fail before any QPU time is used) no."""
+    try:
+        from minorminer.utils.exceptions import EmbeddingError
+        if isinstance(exc, EmbeddingError):
+            return False
+    except ImportError:  # pragma: no cover
+        pass
+    return not isinstance(exc, (ValueError, KeyError, TypeError, AssertionError))
+
+
 def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys=None, max_calls=None,
                  solver_name=None, check_only=False, log=print, retries=3, backend=None,
                  budget: QPUBudget | None = None) -> None:
@@ -377,7 +408,7 @@ def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys
                 res = be.sample(P, rng=np.random.SeedSequence([cfg.seed, 3, N, b]))
                 break
             except Exception as exc:                     # network hiccups, solver busy, ...
-                if attempt == retries:
+                if attempt == retries or not _transient(exc):
                     raise
                 log(f"[anneal] {key} N={N} i={b}: {type(exc).__name__}: {exc}; retry in {2 ** (attempt + 1)}s")
                 time.sleep(2 ** (attempt + 1))
@@ -468,18 +499,18 @@ def collect(out: Path, cfg: CampaignConfig) -> list[dict]:
                 done = [(b, r) for b, r in enumerate(recs) if r is not None]
                 if not done:
                     continue
-                p = np.array([np.sum(np.array(r["counts"])[_success(r["rewards"], ref[b])]) / np.sum(r["counts"])
+                p = np.array([np.sum(np.array(r["counts"])[_success(r["rewards"], ref[b])]) / max(1, np.sum(r["counts"]))
                               for b, r in done])
                 best_res = np.array([(ref[b] - r["best_reward"]) / abs(ref[b]) for b, r in done])
                 mean_res = np.array([np.average((ref[b] - np.array(r["rewards"])) / abs(ref[b]), weights=r["counts"])
-                                     for b, r in done])
+                                     if np.sum(r["counts"]) else np.nan for b, r in done])
                 t_read = np.median([_time_per_read(r) for b, r in done])
                 acc = [r["info"].get("timing_us", {}).get("qpu_access_time", np.nan) / 1e6 for b, r in done]
                 cbf = [r["info"].get("chain_break_fraction_mean", np.nan) for b, r in done]
                 extra = {}
                 if all("polished_rewards" in r for b, r in done):
                     pp = np.array([np.sum(np.array(r["polished_counts"])[_success(r["polished_rewards"], ref[b])])
-                                   / np.sum(r["polished_counts"]) for b, r in done])
+                                   / max(1, np.sum(r["polished_counts"])) for b, r in done])
                     extra.update(p_success_polished=float(np.median(pp)),
                                  residual_polished=float(np.median([(ref[b] - r["polished_best_reward"]) / abs(ref[b])
                                                                     for b, r in done])))
@@ -493,7 +524,7 @@ def collect(out: Path, cfg: CampaignConfig) -> list[dict]:
                 rows.append(dict(base, kind="anneal", method=f"anneal_{s}", regime="", n_done=len(done), **extra,
                                  p_success_median=float(np.median(p)), p_success_mean=float(p.mean()),
                                  p_best_found=float(np.mean(best_res <= TOL)),
-                                 residual_median=float(np.median(best_res)), residual_mean_read=float(np.median(mean_res)),
+                                 residual_median=float(np.median(best_res)), residual_mean_read=float(np.nanmedian(mean_res)) if np.isfinite(mean_res).any() else None,
                                  seconds_median=t_read, tts99=_tts(p.mean(), t_read),
                                  qpu_access_s=float(np.nansum(acc)), chain_break_fraction=_nan_to_none(float(np.mean(cbf)))))
             for r in regimes:
@@ -671,10 +702,204 @@ def plot_backend_comparison(out: Path, comp: list[dict], rows: list[dict], show=
     return path
 
 
+def chain_break_table(out: Path, cfg: CampaignConfig) -> list[dict]:
+    """Solution quality as a function of the number of broken chains in the read.
+
+    One row per (back-end, problem class, N, number of broken chains): how many reads, and among
+    them the success probability and the mean residual, raw and after greedy polishing. The
+    reference is the same as in `collect` (exact / classical, improved by any annealer read);
+    if the classical stage has not run yet it is the best read of all annealers ("best seen").
+    """
+    if not (out / "anneal").exists():
+        return []
+    labels = sorted(p.name for p in (out / "anneal").glob("*"))
+    rows = []
+    for key, eps, J0 in _classes(cfg):
+        for N in cfg.Ns:
+            recs = {lab: [json.loads(p.read_text()) if p.exists() else None
+                          for p in (anneal_path(out, lab, key, N, b) for b in range(cfg.n_instances))]
+                    for lab in labels}
+            if not any(r for v in recs.values() for r in v):
+                continue
+            cp = classical_path(out, key, N)
+            if cp.exists():
+                c = json.loads(cp.read_text())
+                ref, src = np.array(c["ref"], float), ("exact" if c["ref_exact"] else "classical")
+            else:
+                ref, src = np.full(cfg.n_instances, -INF), "best_seen"
+            for v in recs.values():
+                for b, r in enumerate(v):
+                    if r is not None:
+                        ref[b] = max(ref[b], r["best_reward"], r.get("polished_best_reward", -INF))
+            for lab, v in recs.items():
+                acc = {}
+                for b, r in enumerate(v):
+                    if r is None or "reads" not in r:
+                        continue
+                    t = r["reads"]
+                    rw, nb, ct = (np.array(t[k], float) for k in ("reward", "n_broken", "count"))
+                    pr = np.array(t["polished_reward"], float) if t.get("polished_reward") else None
+                    ok = _success(rw, ref[b])
+                    okp = _success(pr, ref[b]) if pr is not None else None
+                    for k in np.unique(nb).astype(int):
+                        m = nb == k
+                        a = acc.setdefault(k, {"reads": 0, "succ": 0.0, "succ_p": 0.0, "res": 0.0, "res_p": 0.0})
+                        a["reads"] += ct[m].sum()
+                        a["succ"] += ct[m][ok[m]].sum()
+                        a["res"] += np.sum(ct[m] * (ref[b] - rw[m]) / abs(ref[b]))
+                        if pr is not None:
+                            a["succ_p"] += ct[m][okp[m]].sum()
+                            a["res_p"] += np.sum(ct[m] * (ref[b] - pr[m]) / abs(ref[b]))
+                tot = sum(a["reads"] for a in acc.values())
+                for k, a in sorted(acc.items()):
+                    rows.append({"backend": lab, "problem": key, "N": N, "n_broken": k, "reads": int(a["reads"]),
+                                 "frac_reads": a["reads"] / tot, "p_success": a["succ"] / a["reads"],
+                                 "p_success_polished": a["succ_p"] / a["reads"],
+                                 "residual_mean": a["res"] / a["reads"], "residual_polished_mean": a["res_p"] / a["reads"],
+                                 "reference": src})
+    return rows
+
+
+def plot_chain_breaks(out: Path, rows: list[dict], min_reads: int = 5, show=False) -> Path | None:
+    if not rows:
+        return None
+    import matplotlib
+    if not show:
+        matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    labs = list(dict.fromkeys(r["backend"] for r in rows))
+    panels = [("frac_reads", "fraction of reads"), ("residual_mean", "mean residual (raw read)"),
+              ("residual_polished_mean", "mean residual after polish"), ("p_success", "P(read = reference)")]
+    fig, axes = plt.subplots(len(panels), len(labs), figsize=(4.6 * len(labs), 2.7 * len(panels)), squeeze=False)
+    cm = plt.get_cmap("viridis")
+    Ns = sorted({r["N"] for r in rows})
+    for j, lab in enumerate(labs):
+        for i, (m, ylab) in enumerate(panels):
+            ax = axes[i, j]
+            for N in Ns:
+                agg = {}
+                for r in rows:                       # pool the problem classes
+                    if r["backend"] == lab and r["N"] == N:
+                        a = agg.setdefault(r["n_broken"], [0, 0.0])
+                        a[0] += r["reads"]
+                        a[1] += r[m] * r["reads"] if m != "frac_reads" else r["reads"]
+                tot = sum(a[0] for a in agg.values()) or 1
+                pts = sorted((k, (a[1] / tot) if m == "frac_reads" else a[1] / a[0]) for k, a in agg.items()
+                             if m == "frac_reads" or a[0] >= min_reads)
+                if pts:
+                    x, y = np.array(pts, float).T
+                    ax.plot(x, y, "o-", ms=3, color=cm(Ns.index(N) / max(1, len(Ns) - 1)), label=f"N={N}")
+            if i == 0:
+                ax.set_title(lab)
+                ax.set_yscale("log")
+            if j == 0:
+                ax.set_ylabel(ylab)
+            if i == len(panels) - 1:
+                ax.set_xlabel("number of broken chains in the read")
+    axes[0, -1].legend(fontsize=6, ncol=2)
+    fig.tight_layout()
+    path = out / "summary" / "chain_breaks.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=130)
+    plt.close(fig) if not show else plt.show()
+    return path
+
+
+def report_chain_breaks(out: Path, cfg: CampaignConfig, log=print) -> list[dict]:
+    rows = chain_break_table(out, cfg)
+    if not rows:
+        log("[chains] no per-read chain-break data (results produced before this feature, or no embedded back-end)")
+        return rows
+    path = out / "summary" / "chain_breaks.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    fig = plot_chain_breaks(out, rows)
+    for lab in dict.fromkeys(r["backend"] for r in rows):
+        for N in sorted({r["N"] for r in rows if r["backend"] == lab}):
+            sel = [r for r in rows if r["backend"] == lab and r["N"] == N]
+            reads = sum(r["reads"] for r in sel)
+            mean_nb = sum(r["n_broken"] * r["reads"] for r in sel) / reads
+            z = sum(r["reads"] for r in sel if r["n_broken"] == 0) / reads
+            log(f"[chains] {lab:22s} N={N:4d}: {reads:6d} reads, mean broken chains {mean_nb:6.3f}, "
+                f"reads with no broken chain {z:6.1%}")
+    log(f"[chains] -> {path}" + (f", {fig}" if fig else ""))
+    return rows
+
+
+def ground_states(out: Path, cfg: CampaignConfig, log=print) -> list[dict]:
+    """The ground state (best configuration) of every instance, from every source available.
+
+    Candidates: the classical reference (exact Gray-code enumeration for N <= n_exact: certified;
+    otherwise the best classical solver / long parallel tempering: best known) and, for every
+    annealing back-end, its best read and its best polished read. The best candidate is reported
+    with its reward R_N, energy H = -N (R_N - offset)/2, configuration (+/- per agent, sign fixed
+    so that agent 0 is +, since S and -S are equivalent), where it came from, whether it is
+    certified, and for each source whether it found it and how far (Hamming distance) its best
+    configuration is. Writes summary/ground_states.csv."""
+    labels = sorted(p.name for p in (out / "anneal").glob("*")) if (out / "anneal").exists() else []
+    rows = []
+    for key, eps, J0 in _classes(cfg):
+        for N in cfg.Ns:
+            cp = classical_path(out, key, N)
+            c = json.loads(cp.read_text()) if cp.exists() else None
+            if c is None and not any(anneal_path(out, l, key, N, 0).exists() for l in labels):
+                continue
+            J = ensure_instances(out, cfg, key, eps, J0, N)
+            for b in range(cfg.n_instances):
+                P = PlannerProblem(J[b])
+                cand = []                                    # (reward, spins, column, source)
+                if c is not None and c.get("ref_S"):
+                    cand.append((c["ref"][b], c["ref_S"][b], "classical", c["ref_source"][b]))
+                for lab in labels:
+                    ap = anneal_path(out, lab, key, N, b)
+                    if ap.exists():
+                        r = json.loads(ap.read_text())
+                        if r.get("best_S"):
+                            cand.append((r["best_reward"], r["best_S"], lab, lab))
+                        if r.get("polished_best_S"):
+                            cand.append((r["polished_best_reward"], r["polished_best_S"], lab + "+polish", lab + "+polish"))
+                if not cand:
+                    continue
+                top = max(t[0] for t in cand)                # ties (to rounding) go to the first source: classical/exact
+                best = next(t for t in cand if t[0] >= top - TOL * max(1, abs(top)))
+                g = _canonical(best[1])
+                S = np.array([1.0 if ch == "+" else -1.0 for ch in g])
+                certified = bool(c is not None and c.get("ref_exact") and c.get("ref_S"))
+                row = {"problem": key, "N": N, "instance": b, "reward": float(P.reward(S)),
+                       "energy": float(P.energy(S)), "ground_state": g, "found_by": best[3],
+                       "certified": certified, "status": "exact optimum" if certified else "best known"}
+                for rw, sp, col, _src in cand:
+                    row[f"{col}:found"] = bool(rw >= top - TOL * max(1, abs(top)))
+                    row[f"{col}:hamming"] = sum(x != y for x, y in zip(_canonical(sp), g))
+                rows.append(row)
+    if rows:
+        path = out / "summary" / "ground_states.csv"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        cols = []
+        for r in rows:
+            cols += [k for k in r if k not in cols]
+        with open(path, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=cols)
+            w.writeheader()
+            w.writerows(rows)
+        for r in rows:
+            log(f"[ground] {r['problem']:10s} N={r['N']:4d} i={r['instance']} R_N={r['reward']:.5f} "
+                f"H={r['energy']:9.4f} {r['status']:13s} by {r['found_by']:24s} {r['ground_state'] if r['N'] <= 40 else r['ground_state'][:40] + '...'}")
+        log(f"[ground] -> {path}")
+    else:
+        log("[ground] no results yet")
+    return rows
+
+
 def stage_analyze(out: Path, cfg: CampaignConfig, log=print, show=False) -> list[dict]:
+    report_chain_breaks(out, cfg, log=log)                # works before the classical stage too
+    ground_states(out, cfg, log=lambda *a: None)
     rows = collect(out, cfg)
     if not rows:
-        log("[analyze] nothing to analyse yet: run the classical stage first")
+        log("[analyze] nothing else to analyse yet: run the classical stage first")
         return rows
     path = write_summary(out, rows)
     figs = plot_summary(out, rows, show=show)
@@ -783,6 +1008,10 @@ def main(argv=None) -> None:
     p.add_argument("--backend", nargs="+", help="default: every back-end of the config (qpu ones need the token)")
     p.add_argument("--solver")
     p = sub.add_parser("analyze", parents=[common], help="summary.csv and figures")
+    sub.add_parser("ground", parents=[common],
+                   help="ground state (best configuration) of every instance, its source, certified or not")
+    sub.add_parser("chains", parents=[common],
+                   help="broken chains per read and solution quality vs number of broken chains (no QPU)")
     a = ap.parse_args(argv)
 
     out = a.out
@@ -831,6 +1060,10 @@ def main(argv=None) -> None:
         stage_embed(out, cfg, a.backend or cfg.backends, solver_name=a.solver)
     elif a.cmd == "analyze":
         stage_analyze(out, cfg)
+    elif a.cmd == "chains":
+        report_chain_breaks(out, cfg)
+    elif a.cmd == "ground":
+        ground_states(out, cfg)
 
 
 if __name__ == "__main__":

@@ -49,6 +49,20 @@ class PlannerProblem:
         quad = {(int(i), int(j)): -float(self.W[i, j]) for i, j in zip(*iu)}
         return dimod.BinaryQuadraticModel({}, quad, 0.0, dimod.SPIN)
 
+    def to_qubo(self):
+        """The same problem as a QUBO in binary variables x_i in {0, 1}, with S_i = 2 x_i - 1.
+
+        H(S) = -sum_{i<j} W_ij S_i S_j
+             = -sum_{i<j} W_ij (2x_i - 1)(2x_j - 1)
+             = sum_{i<j} (-4 W_ij) x_i x_j + sum_i (2 sum_{j != i} W_ij) x_i - sum_{i<j} W_ij,
+        so Q_ij = -4 W_ij (i < j), Q_ii = 2 sum_{j != i} W_ij, offset = -sum_{i<j} W_ij.
+        Same minimiser (mapped by x = (S + 1) / 2) and same energy. The QPU works in Ising form;
+        dimod converts between the two exactly (bqm.change_vartype)."""
+        iu = np.triu_indices(self.N, 1)
+        Q = {(int(i), int(j)): -4.0 * float(self.W[i, j]) for i, j in zip(*iu)}
+        Q.update({(i, i): 2.0 * float(self.W[i].sum()) for i in range(self.N)})
+        return Q, -float(self.W[iu].sum())
+
     def to_ising(self):
         """(h, J) dictionaries for D-Wave style samplers."""
         iu = np.triu_indices(self.N, 1)

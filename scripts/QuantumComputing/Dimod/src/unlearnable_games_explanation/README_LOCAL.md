@@ -97,6 +97,18 @@ python main_simulation.py qpu --out $F --budget-seconds 170        # never passe
 python main_simulation.py qpu --out $F --spent
 ```
 
+**Broken chains.** Every QPU call now saves, read by read, how many chains broke and which spins they belonged to. To see the solution quality as a function of the number of broken chains (no QPU time; works before the classical stage too):
+```powershell
+python main_simulation.py chains --out $F      # summary\chain_breaks.csv + chain_breaks.png (also done by analyze)
+```
+
+**Ground states.** The best configuration of every instance (a string of + and -, one per agent), its energy, where it came from (exact enumeration for N <= 24 is certified; above, best known), and for each method whether it found it and how many spins away its best answer was:
+```powershell
+python main_simulation.py ground --out $F      # summary\ground_states.csv (also done by analyze)
+```
+
+**If a QPU's working graph has changed** since the embeddings were cached (`DisconnectedChainError`), the code now re-checks every cached embedding against today's graph and recomputes it when needed; no QPU time is used before that check.
+
 ## 5. Look at the results
 
 ```bash

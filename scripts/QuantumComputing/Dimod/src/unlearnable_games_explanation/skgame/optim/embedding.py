@@ -200,10 +200,23 @@ class EmbeddingCache:
         return self.root / graph_id / strategy_name / f"N{N:04d}.json"
 
     def get(self, graph_id: str, strat: EmbeddingStrategy, N: int, target) -> dict:
+        """Cached embedding, VALIDATED against `target` when a graph is given.
+
+        A QPU's working graph changes over time (qubits and couplers go offline or come back),
+        so an embedding cached on an earlier day can contain a chain that is no longer connected
+        (DisconnectedChainError). Every cached embedding is therefore re-checked against the
+        current graph; if it no longer fits it is recomputed and the file is replaced (the old one
+        is kept as N....stale.json for the record)."""
         p = self.path(graph_id, strat.name, N)
+        self.last_status = "computed"
         if p.exists():
             d = json.loads(p.read_text())
-            return {int(k): v for k, v in d["embedding"].items()}
+            emb = {int(k): v for k, v in d["embedding"].items()}
+            if target is None or is_valid_embedding(emb, N, target):
+                self.last_status = "cached"
+                return emb
+            os.replace(p, p.with_name(p.stem + ".stale.json"))
+            self.last_status = "recomputed (cached one no longer fits the current graph)"
         emb = strat.embed(N, target)
         if emb:
             p.parent.mkdir(parents=True, exist_ok=True)

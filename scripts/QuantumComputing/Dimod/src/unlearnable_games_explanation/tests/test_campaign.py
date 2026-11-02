@@ -120,3 +120,20 @@ def test_qpu_budget_stops_before_overspending(tmp_path, monkeypatch, capsys):
     assert all("estimated_access_s" in json.loads(f.read_text())["info"] for f in files)
     rows = ms.qpu_spent(out, log=lambda *a: None)
     assert rows["qpu_zephyr_clique"]["calls"] == 2 and rows["qpu_zephyr_clique"]["spent_s"] < 1
+
+
+def test_ground_states_report(tmp_path):
+    out = tmp_path / "g"
+    ms.main(["init", "--out", str(out), "--Ns", "10,14", "--n-instances", "2", "--regimes", "sg_satisficing",
+             "--backends", "sim:zephyr:clique"])
+    ms.main(["classical", "--out", str(out)])
+    ms.main(["sim", "--out", str(out), "--backend", "sim:zephyr:clique"])
+    rows = ms.ground_states(out, ms.load_config(out), log=lambda *a: None)
+    assert len(rows) == 4 and all(r["certified"] and r["found_by"] == "exact" for r in rows)
+    for r in rows:
+        P = PlannerProblem(ms.ensure_instances(out, ms.load_config(out), "eps0_J00", 0.0, 0.0, r["N"])[r["instance"]])
+        S = np.array([1.0 if c == "+" else -1.0 for c in r["ground_state"]])
+        assert r["ground_state"][0] == "+"
+        assert P.reward(S) == pytest.approx(ExactEnumeration().solve(P).reward)
+        assert r["energy"] == pytest.approx(P.energy(S)) and r["classical:hamming"] == 0
+    assert (out / "summary" / "ground_states.csv").exists()
