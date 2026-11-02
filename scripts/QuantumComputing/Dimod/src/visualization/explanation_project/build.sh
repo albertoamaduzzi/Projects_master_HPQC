@@ -4,8 +4,9 @@
 set -eo pipefail
 cd "$(dirname "$0")"
 python qpu_check_figure.py > /dev/null 2>&1 || echo "(qpu_check_figure.py not run: matplotlib missing; using the existing png)"
+python prefactor_figure.py > /dev/null 2>&1 || echo "(prefactor_figure.py not run; using the existing png)"
 python code_ranges.py > /dev/null          # line numbers of the quoted code, from the current source
-for doc in explanation_project dwave_in_the_code; do
+for doc in explanation_project dwave_in_the_code prefactor_and_shimming; do
     for _ in 1 2; do                               # twice: table of contents and references
         pdflatex -interaction=nonstopmode -halt-on-error "$doc.tex" > /dev/null
     done

@@ -4,6 +4,7 @@
 |---|---|
 | [`explanation_project.pdf`](explanation_project.pdf) | **start here**: the whole project explained, with all the figures (source: `src/visualization/explanation_project/explanation_project.tex`, rebuild with `bash src/visualization/explanation_project/build.sh`) |
 | [`dwave_in_the_code.pdf`](dwave_in_the_code.pdf) | how the code uses D-Wave: Ocean functions and their capabilities, modes of use, `qpu --check`, time estimates, the `--budget-seconds` guard, the 1-second test (source: `src/visualization/explanation_project/dwave_in_the_code.tex`) |
+| [`prefactor_and_shimming.pdf`](prefactor_and_shimming.pdf) | the chain-strength prefactor derived step by step (lower bound: chains hold; upper bound: control error), the extended coupler range, flux-bias shimming of the QPU and what it says about the machine (source: `src/visualization/explanation_project/prefactor_and_shimming.tex`) |
 | [`src/unlearnable_games_explanation/RESULTS_FORMAT.md`](src/unlearnable_games_explanation/RESULTS_FORMAT.md) | every file and field a campaign saves (instances, embeddings, physical problems, reads, QPU settings) and how to reconstruct and validate them |
 | [`LEAP_TOKEN.md`](LEAP_TOKEN.md) | how to get the D-Wave Leap token through Cineca, step by step |
 | [`src/unlearnable_games_explanation/`](src/unlearnable_games_explanation/README.md) | the code: `skgame` package, `main_simulation.py` (+ notebook), tests; run it [locally](src/unlearnable_games_explanation/README_LOCAL.md) or [on Leonardo](src/unlearnable_games_explanation/README_CINECA.md) |
