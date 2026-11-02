@@ -72,6 +72,7 @@ class CampaignConfig:
     annealing_time: float = 20.0    # microseconds (QPU only)
     backends: list = field(default_factory=lambda: ["qpu:zephyr:clique", "qpu:pegasus:clique"])
     chain_strength_prefactor: float = 1.414   # chain strength = prefactor x uniform torque compensation
+    chain_strength_by_N: dict = field(default_factory=dict)   # {backend label: {N: p}} from coupling-scan
     chain_break_method: str = "majority_vote"  # majority_vote | minimize_energy | weighted_random | discard
     polish: bool = True             # also score every read after greedy single-flip descent
     sim_num_reads: int = 100        # reads per call when the annealer is the classical simulator
@@ -286,13 +287,14 @@ def make_backend(out: Path, cfg: CampaignConfig, spec: str, solver_name=None):
     return AnnealBackend(spec, anneal_settings(cfg, solver_name), cache_root=out / "embeddings")
 
 
-def anneal_units(out: Path, cfg: CampaignConfig, keys=None, max_N=None):
-    """(key, eps, J0, N, b) still to do."""
-    for key, eps, J0 in _classes(cfg):
-        if keys is not None and key not in keys:
+def anneal_units(out: Path, cfg: CampaignConfig, keys=None, max_N=None, Ns=None):
+    """(key, eps, J0, N, b) to do, N by N (all classes and instances of one N before the next), so that
+    a run stopped by the budget leaves complete N behind. `Ns` restricts to some N."""
+    for N in cfg.Ns:
+        if (max_N is not None and N > max_N) or (Ns is not None and N not in Ns):
             continue
-        for N in cfg.Ns:
-            if max_N is not None and N > max_N:
+        for key, eps, J0 in _classes(cfg):
+            if keys is not None and key not in keys:
                 continue
             for b in range(cfg.n_instances):
                 yield key, eps, J0, N, b
@@ -376,11 +378,11 @@ def _transient(exc: Exception) -> bool:
 
 def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys=None, max_calls=None,
                  solver_name=None, check_only=False, log=print, retries=3, backend=None,
-                 budget: QPUBudget | None = None) -> None:
+                 budget: QPUBudget | None = None, Ns=None) -> None:
     be = backend or make_backend(out, cfg, spec, solver_name)
     limit = be.largest_problem()
     log(f"[anneal] backend={be.spec} solver={be.solver_id()} largest_problem={limit}")
-    units = list(anneal_units(out, cfg, keys))
+    units = list(anneal_units(out, cfg, keys, Ns=Ns))
     too_big = sorted({u[3] for u in units if limit is not None and u[3] > limit})
     if too_big:
         log(f"[anneal] skipping N={too_big}: above the largest embeddable clique ({limit})")
@@ -403,6 +405,10 @@ def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys
             break
         J = ensure_instances(out, cfg, key, eps, J0, N)
         P = PlannerProblem(J[b])
+        if cfg.chain_strength_by_N:                  # per-N prefactor chosen by coupling-scan
+            from coupling_scan import coupling_for
+            be.settings.chain_strength_prefactor = coupling_for(cfg.chain_strength_by_N, be.label, N,
+                                                                cfg.chain_strength_prefactor)
         for attempt in range(retries + 1):
             try:
                 res = be.sample(P, rng=np.random.SeedSequence([cfg.seed, 3, N, b]),
@@ -1103,6 +1109,10 @@ def describe_plan(out: Path, cfg: CampaignConfig, log=print) -> None:
     for i, (key, *_rest) in enumerate(classes):
         log(f"    --task {i}: {key}")
     qpu = [b for b in cfg.backends if b.startswith("qpu:")]
+    if cfg.chain_strength_by_N:
+        for lab, t in cfg.chain_strength_by_N.items():
+            log(f"  chain strength prefactor for {lab} by N (coupling-scan): " +
+                ", ".join(f"{k}: {v:g}" for k, v in sorted(t.items(), key=lambda kv: int(kv[0]))))
     log(f"  annealing back-ends: {cfg.backends}  (chain strength prefactor {cfg.chain_strength_prefactor}, "
         f"chain breaks: {cfg.chain_break_method}, polish: {cfg.polish})")
     n_call = len(cfg.Ns) * len(classes) * cfg.n_instances
@@ -1160,6 +1170,7 @@ def main(argv=None) -> None:
         p.add_argument("--problem", nargs="+")
         p.add_argument("--max-calls", type=int, help="stop after this many sampler calls (per back-end)")
         p.add_argument("--solver", help="pin a QPU by name, e.g. Advantage2_system1.4 (only with one --backend)")
+        p.add_argument("--Ns", nargs="+", type=parse_Ns, help="only these N, e.g. 8:96:8 or 104")
         if name == "qpu":
             p.add_argument("--check", action="store_true",
                            help="connect, print solver and clique size, estimate QPU time; spends nothing")
@@ -1171,6 +1182,20 @@ def main(argv=None) -> None:
     p.add_argument("--backend", nargs="+", help="default: every back-end of the config (qpu ones need the token)")
     p.add_argument("--solver")
     p = sub.add_parser("analyze", parents=[common], help="summary.csv and figures")
+    p = sub.add_parser("coupling-scan", parents=[common],
+                       help="choose the chain-strength prefactor for every N by testing it on the QPU")
+    p.add_argument("--Ns", nargs="+", type=parse_Ns, default=None, help="N values, e.g. 8:48:8 104")
+    p.add_argument("--prefactors", nargs="+", type=float, default=[0.5, 0.75, 1.0, 1.414, 2.0])
+    p.add_argument("--n-instances", type=int, default=1)
+    p.add_argument("--num-reads", type=int, default=200)
+    p.add_argument("--problem", nargs="+", help="problem classes to scan (default: eps0_J00)")
+    p.add_argument("--backend", nargs="+", help="default: the qpu back-ends of the config")
+    p.add_argument("--threshold", type=float, default=0.0,
+                   help="accepted mean fraction of broken chains (default 0: no chain broken)")
+    p.add_argument("--budget-seconds", type=float, help="hard cap on the QPU time of this scan")
+    p.add_argument("--check", action="store_true", help="estimate the QPU time; spends nothing")
+    p.add_argument("--summary-only", action="store_true", help="only (re)compute the choice from saved results")
+    p.add_argument("--no-apply", action="store_true", help="do not store the chosen values in config.json")
     p = sub.add_parser("scan-summary", help="compare campaigns differing only in annealing settings (no QPU)")
     p.add_argument("--dirs", nargs="+", required=True, type=Path)
     sub.add_parser("validate", parents=[common],
@@ -1222,8 +1247,9 @@ def main(argv=None) -> None:
             return
         budget = QPUBudget(getattr(a, "budget_seconds", None))
         for spec in specs:
+            Ns = sorted({n for g in a.Ns for n in g}) if a.Ns else None
             stage_anneal(out, cfg, spec, keys=a.problem, max_calls=a.max_calls, solver_name=a.solver,
-                         check_only=getattr(a, "check", False), budget=budget)
+                         check_only=getattr(a, "check", False), budget=budget, Ns=Ns)
         if budget.limit is not None and not getattr(a, "check", False):
             print(f"[budget] spent {budget.spent:.3f}s of the {budget.limit:.3f}s allowed by --budget-seconds")
     elif a.cmd == "embed":
@@ -1236,6 +1262,16 @@ def main(argv=None) -> None:
         ground_states(out, cfg)
     elif a.cmd == "validate":
         validate(out, cfg)
+    elif a.cmd == "coupling-scan":
+        import coupling_scan as cs
+        if a.summary_only:
+            cs.summarize_coupling_scan(out, cfg, threshold=a.threshold, apply=not a.no_apply)
+        else:
+            Ns = sorted({n for group in (a.Ns or [[n for n in cfg.Ns if n <= 48]]) for n in group})
+            cs.find_best_coupling_per_problem(out, cfg, Ns, prefactors=a.prefactors, specs=a.backend, keys=a.problem,
+                                              n_instances=a.n_instances, num_reads=a.num_reads,
+                                              threshold=a.threshold, budget=QPUBudget(a.budget_seconds),
+                                              check_only=a.check, apply=not a.no_apply)
 
 
 if __name__ == "__main__":

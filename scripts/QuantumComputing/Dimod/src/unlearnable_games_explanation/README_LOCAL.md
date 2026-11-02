@@ -107,6 +107,25 @@ python main_simulation.py chains --out $F      # summary\chain_breaks.csv + chai
 python main_simulation.py ground --out $F      # summary\ground_states.csv (also done by analyze)
 ```
 
+**Choosing the chain strength for every N (`coupling-scan`, recommended before the main run).** For every N and QPU, the same instance is annealed with each prefactor p of a grid; the scan measures how many chains break and picks the **smallest p with no broken chain** (or, if none reaches 0, the one with the fewest; the output says when the choice is at the edge of the grid). The fewest breaks alone would always pick the largest p, which squeezes the problem into the noise. The table {QPU: {N: p}} is stored in `config.json`; the main run then uses it call by call, interpolating between scanned N and keeping the last value beyond.
+```powershell
+$F = "results\full2"
+python main_simulation.py init --preset full --out $F
+python main_simulation.py coupling-scan --out $F --Ns 8:48:8 104 --check            # estimated time, spends nothing (~4 s)
+python main_simulation.py coupling-scan --out $F --Ns 8:48:8 104 --budget-seconds 6
+#   -> results\full2\coupling_scan\coupling_scan.png (broken chains vs p for each N; chosen p vs N)
+#      coupling_scan.csv, best_coupling.json; the table is printed and stored in config.json
+python main_simulation.py plan --out $F                                               # shows the p used for each N
+```
+Then the main run, N by N, in steps you can stop at (each stops cleanly at its budget; rerun to continue):
+```powershell
+python main_simulation.py qpu --out $F --Ns 8:96:8 --budget-seconds 112               # both QPUs, ~107 s
+python main_simulation.py qpu --out $F --Ns 104 --budget-seconds 12                   # N = 104 alone, ~10 s
+python main_simulation.py qpu --out $F --Ns 112:160:8 --budget-seconds 45             # Pegasus only (Zephyr max 104), ~41 s
+python main_simulation.py qpu --out $F --spent
+```
+Options: `--prefactors 0.5 0.75 1.0 1.414 2.0` (default), `--n-instances` (default 1), `--num-reads` (default 200), `--threshold` (accepted mean fraction of broken chains, default 0), `--summary-only` (recompute the choice from saved scan results).
+
 **Choosing the chain strength (scan).** There is no formula for the best chain-strength prefactor p: it can only be found by trying a few values on the same instances. Each value is its own small campaign (same instances, only p differs); `scan-summary` compares them. Example at N = 64, 2 instances, both QPUs, 1000 reads: 4 × 2 × 2 = 16 calls ≈ 16 × 0.24 s ≈ 4 s of QPU time:
 ```powershell
 foreach ($p in "0.75", "1.0", "1.414", "2.0") {

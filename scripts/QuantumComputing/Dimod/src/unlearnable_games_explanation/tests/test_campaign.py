@@ -165,3 +165,39 @@ def test_records_are_complete_and_validate(tmp_path, monkeypatch):
     assert tally and all(bad == 0 for ok, bad in tally.values())
     rows = ms.scan_summary(runs, log=lambda *a: None)
     assert {row["prefactor"] for row in rows} == {0.5, 1.414} and (tmp_path / "scan_summary.csv").exists()
+
+
+def test_choose_coupling_rule_and_interpolation():
+    import coupling_scan as cs
+    rows = [{"p": 0.5, "broken_fraction": 0.2}, {"p": 1.0, "broken_fraction": 0.0},
+            {"p": 1.414, "broken_fraction": 0.0}, {"p": 2.0, "broken_fraction": 0.0}]
+    assert cs.choose_coupling(rows)[0] == 1.0                      # smallest p with no broken chain
+    assert cs.choose_coupling(rows, threshold=0.25)[0] == 0.5      # looser threshold -> smaller p
+    p, why = cs.choose_coupling([{"p": 0.5, "broken_fraction": 0.3}, {"p": 1.0, "broken_fraction": 0.1}])
+    assert p == 1.0 and "LARGEST" in why                           # never reaches 0: fewest, flagged
+    table = {"qpu_zephyr_clique": {"8": 0.5, "48": 1.5, "104": 2.0}}
+    assert cs.coupling_for(table, "qpu_zephyr_clique", 28, 9.9) == pytest.approx(1.0)   # interpolated
+    assert cs.coupling_for(table, "qpu_zephyr_clique", 160, 9.9) == 2.0                 # beyond: last value
+    assert cs.coupling_for(table, "qpu_pegasus_clique", 64, 1.414) == 1.414             # no table: default
+
+
+def test_coupling_scan_end_to_end_and_main_run_uses_it(tmp_path, monkeypatch):
+    import dwave.system
+    from dwave.system.testing import MockDWaveSampler
+    monkeypatch.setattr(dwave.system, "DWaveSampler",
+                        lambda solver=None, **kw: MockDWaveSampler(topology_type="zephyr", topology_shape=[3, 4]))
+    out = tmp_path / "c"
+    ms.main(["init", "--out", str(out), "--Ns", "8:24:8", "--n-instances", "1", "--regimes", "sg_satisficing",
+             "--num-reads", "50", "--backends", "qpu:zephyr:clique"])
+    ms.main(["coupling-scan", "--out", str(out), "--Ns", "8", "24", "--prefactors", "0.5", "1.414",
+             "--num-reads", "50", "--budget-seconds", "2"])
+    cfg = ms.load_config(out)
+    t = cfg.chain_strength_by_N["qpu_zephyr_clique"]
+    assert set(t) == {"8", "24"} and (out / "coupling_scan" / "coupling_scan.png").exists()
+    ms.main(["qpu", "--out", str(out), "--Ns", "16", "--budget-seconds", "1"])        # only N = 16
+    files = list((out / "anneal" / "qpu_zephyr_clique").rglob("*.json"))
+    assert len(files) == 1 and "N0016" in files[0].name
+    used = json.loads(files[0].read_text())["info"]["settings"]["chain_strength_prefactor"]
+    assert used == pytest.approx((t["8"] + t["24"]) / 2)                             # interpolated at N = 16
+    tally = ms.validate(out, cfg, log=lambda *a: None)
+    assert all(bad == 0 for ok, bad in tally.values())

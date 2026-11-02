@@ -382,6 +382,17 @@ The optimum depends on $N$, on the instance class and on the chip. The same hold
 A rule of thumb from D-Wave's guidance: chain-break fractions of a few per cent or less, with the success rate still rising as $p$ decreases, mean there is room to lower $p$.
 
 %=====================================================================================
+\section{Choosing the chain strength for every $N$: \texorpdfstring{\code{coupling-scan}}{coupling-scan}}
+%=====================================================================================
+For every QPU and every $N$ of a (reduced) grid, the same instance is annealed with each prefactor $p$ of a grid, by default $0.5,0.75,1,1.414,2$, with 200 reads. The scan counts the broken chains of every read.
+
+\paragraph{The rule.} Take the \emph{smallest} $p$ whose mean fraction of broken chains is at most a threshold (default 0: no chain broken in any read). If no $p$ reaches it, take the $p$ with the fewest broken chains. Minimising the breaks alone would always select the largest $p$ tested, since breaks decrease monotonically with $p$, while a larger $p$ compresses the SK couplings further (auto-scale divides by $\approx c$). The smallest $p$ that keeps the chains intact is the standard compromise. The output flags a choice at the edge of the grid.
+\src{coupling_scan.py}{\rChooseA}{\rChooseB}{the choice of $p$}
+\paragraph{Use in the main run.} The table $\{\text{QPU}:\{N:p\}\}$ is stored in \code{config.json} (\code{chain_strength_by_N}). The QPU stage sets $p$ call by call: exact for scanned $N$, linear interpolation in between, the last value beyond the largest scanned $N$. Every result records the $p$ actually used, and \code{validate} checks the chain strength of each call against its own $p$.
+\src{coupling_scan.py}{\rInterpA}{\rInterpB}{prefactor for a given $N$}
+\paragraph{Cost.} The scan costs $\approx3.8$ s of QPU time for $N=8,\dots,48$ and 104 on both QPUs. That is about 15.8 ms of programming plus 200 reads per call, for 70 calls. The time does not depend on $p$.
+
+%=====================================================================================
 \section{Reproducibility: everything needed to reconstruct a call}
 %=====================================================================================
 Each call saves:
