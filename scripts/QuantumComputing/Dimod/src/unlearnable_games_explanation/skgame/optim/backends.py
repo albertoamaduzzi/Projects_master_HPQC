@@ -226,6 +226,7 @@ class AnnealBackend:
             info["embedding_used"] = {str(i): [int(q) for q in emb[i]] for i in range(P.N)}
             info["chain_lengths"] = [len(emb[i]) for i in range(P.N)]
             info["chain_strength"] = float(cs_used) if np.isscalar(cs_used) else None
+            info["chain_strength_prefactor"] = float(self.settings.chain_strength_prefactor)
             info["max_abs_logical_coupling"] = float(np.max(np.abs(P.W)))
             q = np.array(list(target.quadratic.values()), float)
             lo, hi = (info["solver_properties"].get("j_range") or [-1.0, 1.0])

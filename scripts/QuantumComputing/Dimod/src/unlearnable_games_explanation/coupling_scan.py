@@ -62,7 +62,11 @@ def coupling_for(table: dict, label: str, N: int, default: float) -> float:
 
 def find_best_coupling_per_problem(out: Path, cfg, Ns, prefactors=DEFAULT_PREFACTORS, specs=None, keys=None,
                                    n_instances: int = 1, num_reads: int = 200, threshold: float = 0.0,
-                                   budget=None, check_only: bool = False, apply: bool = True, log=print) -> dict:
+                                   budget=None, check_only: bool = False, apply: bool = True, adaptive: bool = False,
+                                   log=print) -> dict:
+    """adaptive=True: for each (back-end, N) the grid is climbed from the smallest p and stops at the first
+    p that meets the threshold (breaks fall with p, and the rule picks the smallest such p anyway):
+    the same choice for roughly half the QPU time. --check reports the full-grid upper bound."""
     import main_simulation as ms
     from skgame.optim.problem import PlannerProblem
 
@@ -96,7 +100,11 @@ def find_best_coupling_per_problem(out: Path, cfg, Ns, prefactors=DEFAULT_PREFAC
             total += ms._call_estimate(be, N, cfg)
         log(f"[coupling] estimated QPU access time: {total:.2f} s (spends nothing)")
         return {}
+    todo.sort(key=lambda t: (t[2], specs.index(t[0].spec), t[1], t[3], t[4]))   # N, back-end, p ascending
+    reached = {(lab, N) for lab, t in _saved_ok(out, threshold).items() for N in t} if adaptive else set()
     for n, (be, key, N, p, b) in enumerate(todo):
+        if (be.label, N) in reached:
+            continue
         est = ms._call_estimate(be, N, cfg)
         if not budget.allows(est):
             log(f"[coupling] budget: spent {budget.spent:.3f}s of {budget.limit:.3f}s; stopping before "
@@ -120,7 +128,26 @@ def find_best_coupling_per_problem(out: Path, cfg, Ns, prefactors=DEFAULT_PREFAC
         budget.charge(acc if acc > 0 else est, est)
         log(f"[coupling] {n + 1:3d}/{len(todo)} {be.label:20s} N={N:4d} p={p:<6g} "
             f"broken/read={_mean_broken(res):6.3f} qpu_access={acc * 1e3:.1f}ms (total {budget.spent:.3f}s)")
+        if adaptive and b == n_instances - 1 and (be.label, N) in {(l, int(k)) for l, t in _saved_ok(out, threshold).items() for k in t}:
+            reached.add((be.label, N))
+            log(f"[coupling]     {be.label} N={N}: threshold reached at p={p:g}; larger p skipped")
     return summarize_coupling_scan(out, cfg, threshold=threshold, apply=apply, log=log)
+
+
+def _saved_ok(out: Path, threshold: float) -> dict:
+    """{label: {N: [p...]}} of the saved scan points (all instances together) meeting the threshold."""
+    acc = {}
+    for f in (out / "coupling_scan").glob("*/*/N*_p*_i*.json") if (out / "coupling_scan").exists() else []:
+        r = json.loads(f.read_text())
+        h = r["info"].get("broken_chains_hist") or {}
+        a = acc.setdefault((f.parent.parent.name, r["N"], r["prefactor"]), [0, 0])
+        a[0] += sum(h.values())
+        a[1] += sum(int(k) * v for k, v in h.items())
+    ok = {}
+    for (lab, N, p), (reads, broken) in acc.items():
+        if reads and broken / reads / N <= threshold + 1e-15:
+            ok.setdefault(lab, {}).setdefault(N, []).append(p)
+    return ok
 
 
 def _mean_broken(res) -> float:

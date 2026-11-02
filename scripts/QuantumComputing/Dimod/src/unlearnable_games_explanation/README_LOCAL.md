@@ -1,5 +1,7 @@
 # Running everything on your own computer
 
+> **For the QPU runs, follow [PIPELINE.md](PIPELINE.md).** It is one linear path: list of N → calibration of p_opt(N, machine) → SK runs → ground states and energies. This page covers installation and every other option.
+
 The whole campaign also runs on a laptop or workstation (Linux, macOS, or Windows through WSL): the classical part uses your CPU, and the QPU part only needs the Leap token and internet. For Leonardo see [README_CINECA.md](README_CINECA.md); the two can be mixed (`cineca/sync.sh`).
 
 Measured times on 2–4 cores (this repository's test machine):
@@ -21,7 +23,7 @@ cd Projects_master_HPQC/scripts/QuantumComputing/Dimod/src/unlearnable_games_exp
 ## 2. Environment (once)
 
 ```bash
-bash local/setup_env.sh               # creates .venv, installs cineca/requirements.txt, runs the 119 tests
+bash local/setup_env.sh               # creates .venv, installs cineca/requirements.txt, runs the 120 tests
 WITH_NB=1 bash local/setup_env.sh     # alternatively: + Jupyter, for the notebook
 source .venv/bin/activate             # in every new terminal
 ```

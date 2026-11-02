@@ -1227,6 +1227,18 @@ def main(argv=None) -> None:
     p.add_argument("--budget-seconds", type=float)
     p.add_argument("--check", action="store_true", help="estimate the QPU time; spends nothing")
     p.add_argument("--no-apply", action="store_true", help="do not use the offsets in later qpu calls")
+    # ---- the linear QPU pipeline (pipeline.py): budget -> calibrate -> run -> report
+    p = sub.add_parser("budget", parents=[common], help="PIPELINE 0: QPU time of calibrate + run (spends nothing)")
+    p.add_argument("--total", type=float, default=178.0, help="QPU seconds you have (default 178)")
+    p = sub.add_parser("calibrate", parents=[common], help="PIPELINE 1: p_opt for every (N, machine) of the config")
+    p.add_argument("--budget-seconds", type=float)
+    p.add_argument("--threshold", type=float, default=0.0, help="accepted fraction of broken chains (default 0)")
+    p.add_argument("--check", action="store_true", help="estimate only; spends nothing")
+    p = sub.add_parser("run", parents=[common], help="PIPELINE 2: anneal every N with its p_opt, then report")
+    p.add_argument("--budget-seconds", type=float)
+    p.add_argument("--check", action="store_true", help="estimate only; spends nothing")
+    p.add_argument("--allow-uncalibrated", action="store_true", help="interpolate p for N without calibration")
+    sub.add_parser("report", parents=[common], help="PIPELINE 3: ground state, energy, reference per (machine, N)")
     p = sub.add_parser("scan-summary", help="compare campaigns differing only in annealing settings (no QPU)")
     p.add_argument("--dirs", nargs="+", required=True, type=Path)
     sub.add_parser("validate", parents=[common],
@@ -1294,6 +1306,16 @@ def main(argv=None) -> None:
         ground_states(out, cfg)
     elif a.cmd == "validate":
         validate(out, cfg)
+    elif a.cmd in ("budget", "calibrate", "run", "report"):
+        import pipeline
+        if a.cmd == "budget":
+            pipeline.budget(out, cfg, total=a.total)
+        elif a.cmd == "calibrate":
+            pipeline.calibrate(out, cfg, budget_s=a.budget_seconds, check=a.check, threshold=a.threshold)
+        elif a.cmd == "run":
+            pipeline.run(out, cfg, budget_s=a.budget_seconds, check=a.check, allow_uncalibrated=a.allow_uncalibrated)
+        else:
+            pipeline.report(out, cfg)
     elif a.cmd == "shim":
         import shimming
         shimming.run_shimming(out, cfg, a.backend, a.N, iterations=a.iterations, alpha_phi=a.alpha_phi,
