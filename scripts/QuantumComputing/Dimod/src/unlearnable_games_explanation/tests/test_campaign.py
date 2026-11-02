@@ -168,7 +168,7 @@ def test_records_are_complete_and_validate(tmp_path, monkeypatch):
 
 
 def test_choose_coupling_rule_and_interpolation():
-    import coupling_scan as cs
+    from dwave_utils import coupling_scan as cs
     rows = [{"p": 0.5, "broken_fraction": 0.2}, {"p": 1.0, "broken_fraction": 0.0},
             {"p": 1.414, "broken_fraction": 0.0}, {"p": 2.0, "broken_fraction": 0.0}]
     assert cs.choose_coupling(rows)[0] == 1.0                      # smallest p with no broken chain
@@ -215,7 +215,7 @@ def test_extended_j_range_and_shimming_on_mock(tmp_path, monkeypatch):
              "--chain-strength-prefactor", "3"])
     ms.main(["shim", "--out", str(out), "--backend", "qpu:zephyr:clique", "--N", "16", "--iterations", "3",
              "--num-reads", "40", "--budget-seconds", "1"])
-    import shimming
+    from dwave_utils import shimming
     fb = shimming.load_fbos(out, "qpu_zephyr_clique")
     hist = json.loads((out / "shims" / "qpu_zephyr_clique" / "history.json").read_text())
     assert len(hist) == 3 and fb and any(abs(v) > 0 for v in fb.values())
@@ -273,7 +273,7 @@ def test_pipeline_all_classes_and_fill(tmp_path, monkeypatch):
     """One p_opt per (machine, N) shared by every class; budget --fill sizes the reads to use what is left."""
     import csv as _csv
     import dwave.system
-    import pipeline
+    from dwave_utils import pipeline
     from dwave.system.testing import MockDWaveSampler
     monkeypatch.setattr(dwave.system, "DWaveSampler",
                         lambda solver=None, **kw: MockDWaveSampler(topology_type="zephyr", topology_shape=[3, 4]))
@@ -333,7 +333,7 @@ def test_compare_step_on_mock(tmp_path, monkeypatch):
 
 def test_feasibility_model():
     """Verdicts follow the formulas: eps = sigma sqrt|E| p sqrt(N-1) / r, T/T_c = p / (r beta T_c)."""
-    import feasibility as fz
+    from dwave_utils import feasibility as fz
     rows = fz.run("zephyr", [16, 200], sigma=0.02, beta=5.0, n=3, log=lambda *a: None)
     r16, r200 = rows
     assert r200["verdict"] == "NO" and "largest clique" in r200["reason"]
@@ -345,3 +345,47 @@ def test_feasibility_model():
     assert good["verdict"] == "YES" and bad["verdict"] == "NO"
     ext = fz.run("zephyr", [16], sigma=0.02, beta=5.0, extended=True, n=3, log=lambda *a: None)[0]
     assert ext["eps"] == pytest.approx(r16["eps"] / 2, rel=0.05)         # extended range halves the error
+
+
+def test_dwave_utils_api_and_cli(tmp_path, monkeypatch, capsys):
+    """The package exposes the functions and `python -m dwave_utils` forwards to main_simulation."""
+    import dwave_utils as du
+    from dwave_utils.__main__ import main as du_main
+    for name in du.__all__:
+        assert hasattr(du, name)
+    rows = du.check_feasibility("zephyr", [16], n=2, log=lambda *a: None)
+    assert du.feasibility.run is du.check_feasibility
+    assert rows[0]["verdict"] in ("YES", "MARGINAL", "NO")
+    du_main(["feasibility", "--topology", "zephyr", "--N", "16", "--instances", "2"])
+    assert "verdict" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        du_main(["no-such-command"])
+    out = tmp_path / "api"
+    ms.main(["init", "--out", str(out), "--Ns", "8", "--n-instances", "1", "--regimes", "sg_satisficing"])
+    o, cfg = du.open_campaign(out)
+    assert o == out and cfg.Ns == [8]
+    assert du.left(out, 10.0) == pytest.approx(10.0)
+
+
+def test_dwave_utils_python_sequence_keeps_config(tmp_path, monkeypatch):
+    """Calling the steps from Python with ONE cfg object: no step overwrites what another stored."""
+    import dwave.system
+    import dwave_utils as du
+    from dwave.system.testing import MockDWaveSampler
+    monkeypatch.setattr(dwave.system, "DWaveSampler",
+                        lambda solver=None, **kw: MockDWaveSampler(topology_type="zephyr", topology_shape=[3, 4]))
+    out = tmp_path / "py"
+    ms.main(["init", "--out", str(out), "--Ns", "8", "--n-instances", "1", "--regimes", "sg_satisficing",
+             "--num-reads", "20", "--backends", "qpu:zephyr:clique"])
+    out, cfg = du.open_campaign(out)
+    du.calibrate(out, cfg, log=lambda *a: None)
+    assert cfg.chain_strength_by_N                                   # mirrored into the caller's cfg
+    total = du.spent_in_campaign(out)["calibrate"] + 2.0
+    du.budget(out, cfg, total=total, fill=True, margin=0.2, log=lambda *a: None)
+    disk = ms.load_config(out)
+    assert disk.chain_strength_by_N == cfg.chain_strength_by_N and disk.num_reads == cfg.num_reads > 20
+    du.shim(out, cfg, "qpu:zephyr:clique", 8, iterations=2, num_reads=20, log=lambda *a: None)
+    disk = ms.load_config(out)
+    assert disk.flux_biases_files and disk.chain_strength_by_N and disk.num_reads == cfg.num_reads
+    du.run(out, cfg, budget_s=du.left(out, total), log=lambda *a: None)
+    assert du.report(out, cfg, log=lambda *a: None)

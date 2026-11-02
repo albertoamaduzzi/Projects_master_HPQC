@@ -35,8 +35,8 @@ SPECS = {
     "Cbt": (M, r"^def chain_break_table", None),
     "Ground": (M, r"^def ground_states", None),
     "Validate": (M, r"^def validate", None),
-    "Choose": ("coupling_scan.py", r"^def choose_coupling", None),
-    "Interp": ("coupling_scan.py", r"^def coupling_for", None),
+    "Choose": ("dwave_utils/coupling_scan.py", r"^def choose_coupling", None),
+    "Interp": ("dwave_utils/coupling_scan.py", r"^def coupling_for", None),
 }
 
 

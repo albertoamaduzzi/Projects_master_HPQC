@@ -233,9 +233,7 @@ def summarize_coupling_scan(out: Path, cfg, threshold: float = 0.0, apply: bool 
                 if r["backend"] == lab and r.get("chosen") and "(" in r["reason"]:
                     log(f"[coupling]   N={r['N']}: {r['reason']}")
     if apply:
-        cfg.chain_strength_by_N = best
-        cfg.chain_strength_by_class = by_class
-        ms.save_config(out, cfg)
+        ms.update_config(out, cfg, chain_strength_by_N=best, chain_strength_by_class=by_class)
         log(f"[coupling] stored in {out / 'config.json'} (chain_strength_by_N): `qpu` now uses these values")
     log(f"[coupling] -> {root / 'coupling_scan.csv'}, {root / 'coupling_scan.png'}, {root / 'best_coupling.json'}")
     return best

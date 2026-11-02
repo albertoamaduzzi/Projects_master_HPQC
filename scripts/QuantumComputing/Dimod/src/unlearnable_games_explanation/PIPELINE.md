@@ -128,4 +128,4 @@ For each N it prints YES / MARGINAL / NO and why. It combines:
 - the control error σ;
 - the effective temperature of the machine.
 
-It also prints the σ and β_eff the problem **would need** for a YES. σ (default 0.02) and β_eff (default 5) are assumed orders of magnitude, not measurements. YES is a necessary condition for a faithful, cold sampler; it does not promise that the QPU beats classical solvers. The formulas are in the docstring of `feasibility.py`.
+It also prints the σ and β_eff the problem **would need** for a YES. σ (default 0.02) and β_eff (default 5) are assumed orders of magnitude, not measurements. YES is a necessary condition for a faithful, cold sampler; it does not promise that the QPU beats classical solvers. The formulas are in the docstring of `dwave_utils/feasibility.py`.

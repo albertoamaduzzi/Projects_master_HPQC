@@ -49,7 +49,7 @@ def run_shimming(out: Path, cfg, spec: str, N: int, iterations: int = 30, alpha_
                  gauge: bool = True, key: str | None = None, budget=None, check_only: bool = False,
                  apply: bool = True, seed: int = 11, log=print) -> dict:
     import main_simulation as ms
-    from coupling_scan import prefactor_for
+    from dwave_utils.coupling_scan import prefactor_for
     from skgame.optim.problem import PlannerProblem
 
     be = ms.make_backend(out, cfg, spec)
@@ -122,9 +122,9 @@ def run_shimming(out: Path, cfg, spec: str, N: int, iterations: int = 30, alpha_
         _plot(d, history)
         log(f"[shim] -> {d / 'fbos.json'}, {hist_path}, {d / 'shim_history.png'}")
     if apply and fbos:
-        cfg.flux_biases_files = dict(cfg.flux_biases_files or {})
-        cfg.flux_biases_files[be.label] = str((d / "fbos.json").relative_to(out))
-        ms.save_config(out, cfg)
+        files = dict(ms.load_config(out).flux_biases_files or {})
+        files[be.label] = str((d / "fbos.json").relative_to(out))
+        ms.update_config(out, cfg, flux_biases_files=files)
         log(f"[shim] stored in config.json: `qpu` calls of {be.label} now use these flux-bias offsets")
     return {"fbos": fbos, "history": history}
 

@@ -116,6 +116,18 @@ def save_config(out: Path, cfg: CampaignConfig) -> None:
     _write_json(out / "config.json", asdict(cfg))
 
 
+def update_config(out: Path, cfg: CampaignConfig | None = None, **fields) -> CampaignConfig:
+    """Change some fields of <out>/config.json, starting from what is ON DISK (so a stale in-memory
+    copy never overwrites what another step stored), and mirror them into `cfg` if given."""
+    disk = load_config(out)
+    for k, v in fields.items():
+        setattr(disk, k, v)
+        if cfg is not None:
+            setattr(cfg, k, v)
+    save_config(out, disk)
+    return disk
+
+
 def load_config(out: Path) -> CampaignConfig:
     path = out / "config.json"
     if not path.exists():
@@ -416,7 +428,7 @@ def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys
         J = ensure_instances(out, cfg, key, eps, J0, N)
         P = PlannerProblem(J[b])
         if cfg.chain_strength_by_N or cfg.chain_strength_by_class:   # p chosen by calibration / coupling-scan
-            from coupling_scan import prefactor_for
+            from dwave_utils.coupling_scan import prefactor_for
             be.settings.chain_strength_prefactor = prefactor_for(cfg, be.label, key, N)
         for attempt in range(retries + 1):
             try:
@@ -1228,7 +1240,7 @@ def main(argv=None) -> None:
     p.add_argument("--budget-seconds", type=float)
     p.add_argument("--check", action="store_true", help="estimate the QPU time; spends nothing")
     p.add_argument("--no-apply", action="store_true", help="do not use the offsets in later qpu calls")
-    # ---- the linear QPU pipeline (pipeline.py): budget -> calibrate -> run -> report
+    # ---- the linear QPU pipeline (dwave_utils/pipeline.py): budget -> calibrate -> run -> report
     p = sub.add_parser("budget", parents=[common], help="PIPELINE 0: QPU time of calibrate + run (spends nothing)")
     p.add_argument("--total", type=float, default=178.0,
                    help="QPU seconds you had when this campaign started (default 178); keep it fixed between steps")
@@ -1275,7 +1287,7 @@ def main(argv=None) -> None:
     a = ap.parse_args(argv)
 
     if a.cmd == "feasibility":
-        import feasibility
+        from dwave_utils import feasibility
         feasibility.run(a.topology, sorted({n for g in a.N for n in g}), eps=a.eps, J0=a.J0, sigma=a.sigma, beta=a.beta,
                         extended=a.extended_j_range, eps_ok=a.eps_ok, t_ok=a.t_ok, n=a.instances,
                         J_file=a.J_file, plot=a.plot)
@@ -1338,7 +1350,7 @@ def main(argv=None) -> None:
     elif a.cmd == "validate":
         validate(out, cfg)
     elif a.cmd in ("budget", "calibrate", "run", "report", "compare"):
-        import pipeline
+        from dwave_utils import pipeline
         if a.cmd == "compare":
             pipeline.compare(out, cfg, deltas=tuple(a.deltas))
         elif a.cmd == "budget":
@@ -1355,13 +1367,13 @@ def main(argv=None) -> None:
         else:
             pipeline.report(out, cfg)
     elif a.cmd == "shim":
-        import shimming
+        from dwave_utils import shimming
         shimming.run_shimming(out, cfg, a.backend, a.N, iterations=a.iterations, alpha_phi=a.alpha_phi,
                               num_reads=a.num_reads, annealing_time=a.annealing_time, level=a.level,
                               gauge=not a.no_gauge, budget=QPUBudget(a.budget_seconds), check_only=a.check,
                               apply=not a.no_apply)
     elif a.cmd == "coupling-scan":
-        import coupling_scan as cs
+        from dwave_utils import coupling_scan as cs
         if a.summary_only:
             cs.summarize_coupling_scan(out, cfg, threshold=a.threshold, apply=not a.no_apply)
         else:
