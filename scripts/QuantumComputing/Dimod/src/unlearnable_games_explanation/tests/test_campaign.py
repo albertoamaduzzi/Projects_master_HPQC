@@ -299,3 +299,32 @@ def test_pipeline_all_classes_and_fill(tmp_path, monkeypatch):
     for r in res_rows:                                         # each class with its own p_opt
         assert float(r["p_used"]) == float(cfg.chain_strength_by_class[r["problem"]]["qpu_zephyr_clique"][r["N"]])
     assert pipeline.spent_in_campaign(out)["run"] <= total - spent_cal
+
+
+def test_compare_step_on_mock(tmp_path, monkeypatch):
+    """QPU (mock) vs classical vs game, easy -> hard, with exact and best-known references."""
+    import csv as _csv
+    import dwave.system
+    from dwave.system.testing import MockDWaveSampler
+    monkeypatch.setattr(dwave.system, "DWaveSampler",
+                        lambda solver=None, **kw: MockDWaveSampler(topology_type="zephyr", topology_shape=[3, 4]))
+    out = tmp_path / "c"
+    ms.main(["init", "--out", str(out), "--Ns", "8,12", "--n-instances", "2", "--regimes", "ferro_easy", "sg_satisficing",
+             "--num-reads", "30", "--backends", "qpu:zephyr:clique"])
+    cfg = ms.load_config(out)
+    cfg.n_exact = 8                                    # N = 12 gets a best-known reference
+    ms.save_config(out, cfg)
+    ms.main(["classical", "--out", str(out)])
+    ms.main(["calibrate", "--out", str(out)])
+    ms.main(["run", "--out", str(out)])
+    ms.main(["compare", "--out", str(out)])
+    rows = list(_csv.DictReader(open(out / "compare" / "compare.csv")))
+    assert [r["problem"] for r in rows][0] == "eps0_J03"          # easy first
+    kinds = {r["kind"] for r in rows}
+    assert {"qpu", "classical", "game"} <= kinds
+    assert {r["reference"] for r in rows if r["N"] == "8"} == {"exact"}
+    assert {r["reference"] for r in rows if r["N"] == "12"} == {"best_known"}
+    for r in rows:
+        assert 0.0 <= float(r["P_rho_le_0"]) <= float(r["P_rho_le_0.01"]) <= float(r["P_rho_le_0.05"]) <= 1.0
+        assert float(r["rho_best_median"]) >= -1e-9          # nothing beats the reference
+    assert (out / "compare" / "compare.png").exists() and (out / "compare" / "reference_quality.png").exists()

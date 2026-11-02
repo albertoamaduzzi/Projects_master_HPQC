@@ -76,7 +76,28 @@ python main_simulation.py report --out $F
 
 For N > 24 the reference needs the classical stage (`python main_simulation.py classical --out $F`, slow at large N; see README_LOCAL.md). Without it the QPU's configuration is reported, but not compared.
 
-## Budget, step by step (≈178 s, all 4 classes)
+## Step 4: compare (no QPU) — the planner question
+
+```powershell
+python main_simulation.py classical --out $F            # CPU only: classical solvers, the game, references
+python main_simulation.py compare   --out $F            # -> results\sk\compare\compare.csv, compare.png, reference_quality.png
+```
+
+The question: how well does the QPU act as the **central planner** (it picks every agent's choice so as to maximise the total reward)? It is compared with **classical planners** (greedy, SA, PT, τ-EO, SDP+GW, dimod SA/tabu) and with **no planner** (the game: agents learning on their own). Problem classes go from easy to hard: `eps0_J03` (ferromagnetic) → `eps0_J01` (boundary) → `eps0_J00`, `eps1_J00` (spin glass).
+
+**Reference.** For N ≤ n_exact (24) it is the exact optimum. Above that it is the **best reward found by any method**, which is not certified (grey band in the figure). `reference_quality.png` checks how plausible it is: for pure SK the mean ground-state reward should follow R(N) ≈ −2·(−0.7633 + 0.7·N^(−2/3)). That is the Parisi energy plus its finite-size correction.
+
+**Metrics.** A *sample* is one QPU read, one run of a classical solver, or one run of the game. The residual is ρ = (R_ref − R)/|R_ref|.
+
+| metric | meaning | useful when |
+|---|---|---|
+| `rho_best_median` | residual of the best sample, median over instances | every N |
+| `rho_typical_median` | residual of the median sample | every N: is a typical answer close? |
+| `P_rho_le_0` | fraction of samples that reach the reference exactly | small N; it decays exponentially with N for every heuristic, so above n_exact it is ≈ 0 and measured against an uncertified reference |
+| `P_rho_le_0.01` (also 0.02, 0.05) | fraction of samples within 1 % of the reference: **satisficing success** | every N: the primary metric |
+| `TTT99_0.01_s` | time to reach ρ ≤ 1 % once with 99 % probability = t·ln 0.01/ln(1−P) | time comparison. QPU t = anneal + readout + delay per read; `*_incl_programming` also counts the programming time; classical t = wall time of one run. Polished QPU reads have no TTT (polishing runs on the CPU) |
+
+ (≈178 s, all 4 classes)
 
 * **Calibration.** Zephyr N = 8…104 is 13 N; Pegasus N = 8…160 is 20 N, so 33 (N, machine) pairs. With 4 classes that is 132 calibrations.
   * One call: ≈ 15.8 ms + 200 reads × 0.2 ms ≈ 55.8 ms.

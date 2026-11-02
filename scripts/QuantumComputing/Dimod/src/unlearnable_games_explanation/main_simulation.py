@@ -1246,6 +1246,10 @@ def main(argv=None) -> None:
     p.add_argument("--total", type=float,
                    help="QPU seconds available when the campaign started: caps this run at total - already spent")
     sub.add_parser("report", parents=[common], help="PIPELINE 3: ground state, energy, reference per (machine, N)")
+    p = sub.add_parser("compare", parents=[common],
+                       help="PIPELINE 4: QPU planner vs classical solvers vs the game, easy -> hard (no QPU)")
+    p.add_argument("--deltas", nargs="+", type=float, default=[0.0, 0.01, 0.02, 0.05],
+                   help="residual thresholds for the success probabilities (0 = exact)")
     p = sub.add_parser("scan-summary", help="compare campaigns differing only in annealing settings (no QPU)")
     p.add_argument("--dirs", nargs="+", required=True, type=Path)
     sub.add_parser("validate", parents=[common],
@@ -1313,9 +1317,11 @@ def main(argv=None) -> None:
         ground_states(out, cfg)
     elif a.cmd == "validate":
         validate(out, cfg)
-    elif a.cmd in ("budget", "calibrate", "run", "report"):
+    elif a.cmd in ("budget", "calibrate", "run", "report", "compare"):
         import pipeline
-        if a.cmd == "budget":
+        if a.cmd == "compare":
+            pipeline.compare(out, cfg, deltas=tuple(a.deltas))
+        elif a.cmd == "budget":
             pipeline.budget(out, cfg, total=a.total, fill=a.fill, margin=a.margin)
         elif a.cmd == "calibrate":
             pipeline.calibrate(out, cfg, budget_s=a.budget_seconds, check=a.check, threshold=a.threshold, keys=a.problem)

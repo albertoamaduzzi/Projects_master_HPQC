@@ -298,3 +298,255 @@ def report(out: Path, cfg, log=print) -> list:
             f"{r['reached_reference']}")
     log(f"[report] -> {path}  (configurations: column best_configuration, + / - per agent, agent 0 = +)")
     return rows
+
+
+# ================================================================== 4. compare =========
+PARISI_E = -0.7633            # SK ground-state energy per spin, N -> infinity (J_ij ~ N(0, 1/N))
+FINITE_SIZE_A = 0.7           # e0(N) ~ e_inf + A N^(-2/3)  (finite-size correction of the SK ground state)
+
+
+def _ttt(p: float, t: float) -> float:
+    """Time to reach the target at least once with 99 % probability, from p per sample and t per sample."""
+    if not np.isfinite(t) or p <= 0:
+        return float("inf")
+    if p >= 1:
+        return float(t)
+    return float(t * np.log(0.01) / np.log1p(-p))
+
+
+def _samples_stats(rhos: list, weights: list, deltas) -> dict:
+    """rhos/weights: one array per instance (residual of every sample, its multiplicity)."""
+    best = [float(np.min(r)) for r in rhos]
+    typ = []
+    for r, w in zip(rhos, weights):
+        o = np.argsort(r)
+        cw = np.cumsum(np.asarray(w, float)[o])
+        typ.append(float(np.asarray(r)[o][np.searchsorted(cw, cw[-1] / 2)]))
+    d = {"rho_best_median": float(np.median(best)), "rho_typical_median": float(np.median(typ))}
+    for dl in deltas:
+        d[f"P_rho_le_{dl:g}"] = float(np.mean([np.sum(np.asarray(w)[np.asarray(r) <= dl + 1e-12]) / np.sum(w)
+                                              for r, w in zip(rhos, weights)]))
+    return d
+
+
+def compare(out: Path, cfg, deltas=(0.0, 0.01, 0.02, 0.05), log=print) -> list:
+    """The central planner on the QPU vs classical planners vs no planner (the game), per problem class
+    (easy -> hard) and N. No QPU time.
+
+    Reference per instance: the exact optimum for N <= n_exact (computed here if the classical stage
+    has not run), above that the BEST KNOWN reward over every method (flagged: success against it is
+    a lower bound on difficulty, not a certified optimum).
+    For every method a "sample" is one QPU read, one run of a classical solver, or one run of the game.
+    Residual rho = (R_ref - R) / |R_ref|. Metrics:
+      rho_best_median     best sample per instance (median over instances)
+      rho_typical_median  median sample per instance
+      P_rho_le_d          fraction of samples within d of the reference (d = 0: exact success;
+                          d > 0: "satisficing" success, meaningful at every N)
+      TTT99_d             time to reach rho <= d once with 99 % probability (QPU: anneal + readout +
+                          delay per read; *_incl_programming: whole access time / reads; classical: wall
+                          time of one run; game: wall time of one run)
+    Writes compare/compare.csv, compare/compare.png, compare/reference_quality.png."""
+    import main_simulation as ms
+    from skgame.optim.problem import PlannerProblem
+    from skgame.optim.regimes import j0_eff, planner_phase, regimes_by_name
+    from skgame.optim.solvers import _exact_max
+    labels = sorted(p.name for p in (out / "anneal").glob("*")) if (out / "anneal").exists() else []
+    regimes = regimes_by_name(cfg.regimes)
+    classes = sorted(ms._classes(cfg), key=lambda c: -j0_eff(c[1], c[2]))          # easy (ferro) -> hard
+    rows, refq = [], []
+    for key, eps, J0 in classes:
+        for N in cfg.Ns:
+            cp = ms.classical_path(out, key, N)
+            c = json.loads(cp.read_text()) if cp.exists() else None
+            ann = {lab: [ms.anneal_path(out, lab, key, N, b) for b in range(cfg.n_instances)] for lab in labels}
+            ann = {lab: [json.loads(p.read_text()) if p.exists() else None for p in ps] for lab, ps in ann.items()}
+            ann = {lab: rs for lab, rs in ann.items() if any(r is not None for r in rs)}
+            games = {r.name: json.loads(ms.game_path(out, r.name, N).read_text()) for r in regimes
+                     if r.problem_key == key and ms.game_path(out, r.name, N).exists()}
+            if c is None and not ann:
+                continue
+            J = ms.ensure_instances(out, cfg, key, eps, J0, N)
+            ref, kind = [], []
+            for b in range(cfg.n_instances):
+                cand = []
+                if c is not None:
+                    cand.append(float(c["ref"][b]))
+                    for v in c["solvers"].values():
+                        cand += [float(x) for x in v["reward"][b]]
+                for rs in ann.values():
+                    if rs[b] is not None:
+                        cand.append(float(rs[b]["best_reward"]))
+                        if rs[b].get("polished_best_reward") is not None:
+                            cand.append(float(rs[b]["polished_best_reward"]))
+                for g in games.values():
+                    cand.append(float(np.max(g["best_reward"][b])))
+                if c is not None and c.get("ref_exact"):
+                    ref.append(float(c["ref"][b])); kind.append("exact")
+                elif N <= min(cfg.n_exact, 24):
+                    P = PlannerProblem(J[b]); S, _ = _exact_max(P.W)
+                    ref.append(float(P.reward(np.asarray(S, float)))); kind.append("exact")
+                else:
+                    ref.append(max(cand)); kind.append("best_known")
+            ref = np.array(ref)
+            base = {"problem": key, "eps": eps, "J0": J0, "planner_phase": planner_phase(eps, J0), "N": N,
+                    "reference": "exact" if all(k == "exact" for k in kind) else "best_known",
+                    "R_ref_mean": float(ref.mean())}
+            refq.append(dict(base))
+
+            def add(method, kind_, rhos, weights, t_sample, extra=None):
+                d = dict(base, method=method, kind=kind_, n_instances=len(rhos), t_sample_s=t_sample)
+                d.update(_samples_stats(rhos, weights, deltas))
+                for dl in deltas:
+                    d[f"TTT99_{dl:g}_s"] = _ttt(d[f"P_rho_le_{dl:g}"], t_sample)
+                d.update(extra or {})
+                rows.append(d)
+
+            for lab, rs in ann.items():
+                done = [(b, r) for b, r in enumerate(rs) if r is not None]
+                rho = [(ref[b] - np.array(r["rewards"])) / abs(ref[b]) for b, r in done]
+                w = [np.array(r["counts"], float) for b, r in done]
+                t_read = float(np.median([ms._time_per_read(r) for b, r in done]))
+                acc = [r["info"].get("timing_us", {}).get("qpu_access_time", np.nan) / 1e6 / r["info"]["num_reads"]
+                       for b, r in done]
+                t_prog = float(np.nanmedian(acc)) if np.isfinite(acc).any() else float("nan")
+                pu = [r["info"].get("chain_strength_prefactor") for b, r in done]
+                extra = {"p_used": pu[0], "t_sample_incl_programming_s": t_prog,
+                         "frac_reads_no_broken_chain": float(np.mean([(r["info"].get("broken_chains_hist") or {}).get("0", 0)
+                                                                      / max(1, r["info"]["num_reads"]) for b, r in done]))}
+                add(lab, "qpu" if lab.startswith("qpu_") else "anneal_sim", rho, w, t_read, extra)
+                rows[-1].update({f"TTT99_{dl:g}_incl_programming_s": _ttt(rows[-1][f"P_rho_le_{dl:g}"], t_prog)
+                                 for dl in deltas})
+                if all(r.get("polished_rewards") for b, r in done):
+                    rho = [(ref[b] - np.array(r["polished_rewards"])) / abs(ref[b]) for b, r in done]
+                    w = [np.array(r["polished_counts"], float) for b, r in done]
+                    add(lab + "+polish", "qpu" if lab.startswith("qpu_") else "anneal_sim", rho, w, float("nan"),
+                        {"p_used": pu[0]})       # polishing runs on the CPU: no fair per-sample time, no TTT
+            if c is not None:
+                for name, v in c["solvers"].items():
+                    R = np.array(v["reward"], float)
+                    rho = [(ref[b] - R[b]) / abs(ref[b]) for b in range(len(ref))]
+                    add(name, "classical", rho, [np.ones(R.shape[1])] * len(ref), float(np.median(v["seconds"])))
+            for reg, g in games.items():
+                Rf = np.array(g["final_reward"], float)
+                rho = [(ref[b] - Rf[b]) / abs(ref[b]) for b in range(len(ref))]
+                L = np.array(g["period"])
+                add(f"game:{reg}", "game", rho, [np.ones(Rf.shape[1])] * len(ref),
+                    float(g["seconds"]) / Rf.size,
+                    {"frac_fixed_point": float(np.mean(L == 1)), "frac_cycle": float(np.mean(L > 1))})
+    if not rows:
+        log("[compare] nothing to compare yet")
+        return rows
+    d = out / "compare"
+    d.mkdir(parents=True, exist_ok=True)
+    cols = []
+    for r in rows:
+        cols += [k for k in r if k not in cols]
+    with open(d / "compare.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=cols)
+        w.writeheader()
+        w.writerows(rows)
+    _plot_compare(d, rows, [c[0] for c in classes], deltas, cfg.n_exact)
+    _plot_reference(d, refq, classes)
+    for r in rows:
+        if r["kind"] in ("qpu", "game") or r["method"] in ("pt", "sa", "parallel_tempering"):
+            log(f"[compare] {r['problem']:9s} N={r['N']:4d} {r['method']:28s} rho_best={r['rho_best_median']:.4f} "
+                f"P(rho<=1%)={r.get('P_rho_le_0.01', float('nan')):.3f} P(exact)={r['P_rho_le_0']:.3f} ({r['reference']})")
+    log(f"[compare] -> {d / 'compare.csv'}, {d / 'compare.png'}, {d / 'reference_quality.png'}")
+    return rows
+
+
+def _plot_compare(d: Path, rows: list, keys: list, deltas, n_exact: int) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    keys = [k for k in keys if any(r["problem"] == k for r in rows)]
+    sat = next((dl for dl in deltas if dl > 0), None)
+    panels = [("rho_best_median", "best sample: residual (R_ref-R)/R_ref\n(1e-5 = reached it)", True),
+              ("rho_typical_median", "typical sample: residual\n(1e-5 = reached it)", True),
+              ("P_rho_le_0", "P(exact reference) per sample", False)]
+    if sat is not None:
+        panels += [(f"P_rho_le_{sat:g}", f"P(residual <= {sat:g}) per sample\n(satisficing success)", False),
+                   (f"TTT99_{sat:g}_s", f"time to residual <= {sat:g}, 99% [s]", True)]
+    fig, axes = plt.subplots(len(panels), len(keys), figsize=(4.4 * len(keys), 2.9 * len(panels)), squeeze=False)
+    methods = list(dict.fromkeys(r["method"] for r in rows))
+    kind_of = {r["method"]: r["kind"] for r in rows}
+    qcol = {"zephyr": "#1f4fbf", "pegasus": "#c0392b"}
+    ccols = plt.get_cmap("tab10").colors[2:] + plt.get_cmap("Dark2").colors
+    cl = [m for m in methods if kind_of[m] == "classical"]
+    gm = [m for m in methods if kind_of[m] == "game"]
+
+    def style(m):
+        k = kind_of[m]
+        if k in ("qpu", "anneal_sim"):
+            col = next((c for t, c in qcol.items() if t in m), "#555555")
+            pol = m.endswith("+polish")
+            return dict(color=col, lw=2.6 if not pol else 1.6, ls="-" if not pol else "-.",
+                        marker="o" if not pol else "^", ms=4, alpha=1.0 if k == "qpu" else 0.5)
+        if k == "game":
+            return dict(color="black", lw=1.5, ls="--", marker="sDv^"[gm.index(m) % 4], ms=4)
+        return dict(color=ccols[cl.index(m) % len(ccols)], lw=0.9, alpha=0.75, marker=".")
+    for j, key in enumerate(keys):
+        sub = [r for r in rows if r["problem"] == key]
+        for i, (m, lab, logy) in enumerate(panels):
+            ax = axes[i, j]
+            for meth in dict.fromkeys(r["method"] for r in sub):
+                pts = sorted((r["N"], r.get(m)) for r in sub if r["method"] == meth and r.get(m) is not None)
+                if not pts:
+                    continue
+                x, y = np.array(pts, float).T
+                if logy:
+                    y = np.where(np.isfinite(y), np.maximum(y, 1e-5), np.nan)
+                ax.plot(x, y, label=meth, **style(meth))
+            if logy:
+                ax.set_yscale("log")
+            nmax = max(r["N"] for r in rows)
+            if nmax > n_exact:
+                ax.axvspan(n_exact + 0.5, nmax + 0.5, color="#eeeeee", zorder=0)
+            ax.set_xlim(min(r["N"] for r in rows) - 0.5, nmax + 0.5)
+            if i == 0:
+                ph = sub[0]["planner_phase"]
+                ax.set_title(f"{key}  (planner: {ph})")
+            if j == 0:
+                ax.set_ylabel(lab, fontsize=8)
+            if i == len(panels) - 1:
+                ax.set_xlabel("N   (grey: reference = best known, not certified)")
+    hs, ls = [], []
+    for ax in axes.flat:
+        for h, l in zip(*ax.get_legend_handles_labels()):
+            if l not in ls:
+                hs.append(h); ls.append(l)
+    fig.legend(hs, ls, loc="lower center", ncol=min(6, len(ls)), fontsize=8, bbox_to_anchor=(0.5, -0.04))
+    fig.suptitle("Central planner: QPU (thick) vs classical solvers (thin) vs no planner: the game (dashed); "
+                 "classes from easy (left) to hard (right)", y=1.0)
+    fig.tight_layout()
+    fig.savefig(d / "compare.png", dpi=120, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _plot_reference(d: Path, refq: list, classes) -> None:
+    """Is the best-known reference plausibly the ground state? For pure SK the mean ground-state reward
+    follows R(N) ~ -2 (e_inf + A N^(-2/3)) (1 - eps/2), e_inf = -0.7633 (Parisi)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(6.5, 4))
+    for key, eps, J0 in classes:
+        pts = sorted((r["N"], r["R_ref_mean"], r["reference"]) for r in refq if r["problem"] == key)
+        if not pts:
+            continue
+        x = np.array([p[0] for p in pts], float)
+        y = np.array([p[1] for p in pts], float)
+        line, = ax.plot(x, y, "o-", label=key)
+        ex = np.array([p[2] == "exact" for p in pts])
+        ax.plot(x[~ex], y[~ex], "o", mfc="white", color=line.get_color())
+        if J0 == 0:
+            n = np.linspace(max(8, x.min()), x.max(), 200)
+            ax.plot(n, -2 * (PARISI_E + FINITE_SIZE_A * n ** (-2 / 3)) * (1 - eps / 2), ":", color=line.get_color(),
+                    lw=1, label=f"{key}: Parisi + N^-2/3 (expected)")
+    ax.set_xlabel("N")
+    ax.set_ylabel("mean reference reward R_ref")
+    ax.set_title("reference: filled = exact, open = best known", fontsize=9)
+    ax.legend(fontsize=7)
+    fig.tight_layout()
+    fig.savefig(d / "reference_quality.png", dpi=130)
+    plt.close(fig)
