@@ -41,6 +41,7 @@ class AnnealSettings:
     sim_num_reads: int = 100                  # reads when device == "sim"
     sim_num_sweeps: int = 1000
     solver_name: str | None = None            # pin a QPU by name; default: any QPU of the topology
+    extended_j_range: bool = False            # put chain couplers in the extended range (e.g. down to -2)
 
 
 def parse_spec(spec: str) -> tuple[str, str | None, str | None]:
@@ -72,6 +73,9 @@ class AnnealBackend:
         self._child = child                   # injectable (tests: MockDWaveSampler)
         self._target = None
         self._embeddings = {}
+        self.flux_biases: dict | None = None     # {qubit: flux-bias offset (Phi0)} from shimming
+        self.flux_biases_source: str | None = None
+        self.record_qubit_magnetization = False  # per-qubit <s_q> of the physical reads (shimming)
 
     @property
     def label(self) -> str:
@@ -175,7 +179,19 @@ class AnnealBackend:
                 uniform_torque_compensation, prefactor=self.settings.chain_strength_prefactor),
                 smear_vartype=dimod.SPIN)
             cs_used = structure.chain_strength
-            phys = self.child.sample(target, **kw)
+            to_send, scaling = self._scale(target, emb, float(cs_used))
+            if scaling["mode"] != "auto_scale":
+                kw["auto_scale"] = False
+            if self.flux_biases and "flux_biases" in params:
+                nq = int((getattr(self.child, "properties", {}) or {}).get("num_qubits", 0)) or \
+                    (max(map(int, self.child.nodelist)) + 1)
+                fb = [0.0] * nq
+                for q, v in self.flux_biases.items():
+                    fb[int(q)] = float(v)
+                kw["flux_biases"] = fb
+                if "flux_drift_compensation" in params:
+                    kw["flux_drift_compensation"] = True
+            phys = self.child.sample(to_send, **kw)
             phys.resolve()
             chains = [emb[i] for i in range(P.N)]
             broken = np.asarray(broken_chains(phys, chains), bool)          # (physical rows, N)
@@ -192,7 +208,15 @@ class AnnealBackend:
                                    discard=self.settings.chain_break_method == "discard")
         info = out["info"]
         info.update(backend=self.spec, solver=self.solver_id(), settings=asdict(self.settings),
-                    sample_kwargs={k: v for k, v in kw.items() if k != "seed"})
+                    sample_kwargs={k: v for k, v in kw.items() if k not in ("seed", "flux_biases")})
+        if "flux_biases" in kw:
+            v = np.array([x for x in kw["flux_biases"] if x != 0.0])
+            info["flux_biases"] = {"source": self.flux_biases_source, "n_nonzero": int(v.size),
+                                   "rms": float(np.sqrt(np.mean(v ** 2))) if v.size else 0.0}
+        if self.record_qubit_magnetization and self.embedded:
+            w = np.asarray(phys.record.num_occurrences, float)
+            m = (np.asarray(phys.record.sample, float) * w[:, None]).sum(0) / w.sum()
+            info["qubit_magnetization"] = {str(int(q)): float(x) for q, x in zip(phys.variables, m)}
         for k in ("problem_id", "problem_label"):
             if k in ss.info:
                 info[k] = str(ss.info[k])
@@ -213,9 +237,38 @@ class AnnealBackend:
                                 "h_q": np.array(list(target.linear.keys()), dtype=np.int64),
                                 "h": np.array(list(target.linear.values()), float), "offset": float(target.offset)}
             info["programmed"] = {"max_abs_J_before_scaling": float(np.abs(q).max()),
-                                  "auto_scale_divisor": float(worst),
+                                  "auto_scale_divisor": float(worst) if scaling["mode"] == "auto_scale"
+                                  else float(scaling["divisor"]), "scaling": scaling,
                                   "n_qubits": int(target.num_variables), "n_couplers": int(target.num_interactions)}
         return out
+
+    def _scale(self, target, emb, c: float):
+        """Default: send the physical problem unscaled and let the QPU's auto_scale divide everything
+        by max|J| (= c for the default prefactor). With settings.extended_j_range, scale here instead:
+        chain couplers may use the extended range (e.g. [-2, 1] on Advantage), logical ones the normal
+        range, so the divisor is max(c / |ext_lo|, max logical / range end) and the SK couplings are
+        squeezed up to 2x less. The per-qubit coupling sums are checked against
+        per_qubit_coupling_range; if violated, fall back to auto_scale (recorded)."""
+        props = getattr(self.child, "properties", {}) or {}
+        if not (self.settings.extended_j_range and props.get("extended_j_range")):
+            return target, {"mode": "auto_scale"}
+        lo, hi = props.get("j_range", [-1.0, 1.0])
+        ext_lo = float(props["extended_j_range"][0])
+        owner = {q: i for i, ch in emb.items() for q in ch}
+        logical = [v for (a, b), v in target.quadratic.items() if owner[a] != owner[b]]
+        div = max(c / -ext_lo, max([v / hi for v in logical if v > 0], default=0.0),
+                  max([v / lo for v in logical if v < 0], default=0.0))
+        scaled = target.copy()
+        scaled.scale(1.0 / div)
+        pq = props.get("per_qubit_coupling_range")
+        if pq:
+            sums = {}
+            for (a, b), v in scaled.quadratic.items():
+                sums[a] = sums.get(a, 0.0) + v
+                sums[b] = sums.get(b, 0.0) + v
+            if any(not (pq[0] <= x <= pq[1]) for x in sums.values()):
+                return target, {"mode": "auto_scale", "note": "extended range refused: per-qubit coupling sum out of range"}
+        return scaled, {"mode": "extended_j_range", "divisor": float(div), "ext_lo": ext_lo}
 
     def solver_snapshot(self) -> dict:
         """What the QPU looked like at the time of the call: identity, ranges, working-graph size and

@@ -1,7 +1,7 @@
 """Choose the chain-strength prefactor p for every N by testing it on the QPU.
 
     python main_simulation.py coupling-scan --out results/full2 --Ns 8:48:8 104 --check
-    python main_simulation.py coupling-scan --out results/full2 --Ns 8:48:8 104 --budget-seconds 6
+    python main_simulation.py coupling-scan --out results/full2 --Ns 8:48:8 104 --budget-seconds 7
 
 For every back-end and every N, the same instance(s) are annealed with each prefactor p of a grid.
 For each (back-end, N, p) the scan records how many chains broke in every read.
@@ -26,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
-DEFAULT_PREFACTORS = (0.5, 0.75, 1.0, 1.414, 2.0)
+DEFAULT_PREFACTORS = (0.75, 1.0, 1.414, 2.0, 3.0, 4.0, 6.0)
 
 
 def scan_path(out: Path, label: str, key: str, N: int, p: float, b: int) -> Path:
@@ -136,7 +136,19 @@ def summarize_coupling_scan(out: Path, cfg, threshold: float = 0.0, apply: bool 
     for f in sorted(root.glob("*/*/N*_p*_i*.json")) if root.exists() else []:
         r = json.loads(f.read_text())
         a = acc.setdefault((f.parent.parent.name, r["N"], r["prefactor"]),
-                           {"reads": 0, "broken": 0, "zero": 0, "best": -np.inf, "chain_strength": []})
+                           {"reads": 0, "broken": 0, "zero": 0, "best": -np.inf, "chain_strength": [],
+                            "c_over_max": [], "prog_rms": []})
+        info = r["info"]
+        if info.get("chain_strength") and info.get("max_abs_logical_coupling"):
+            a["c_over_max"].append(info["chain_strength"] / info["max_abs_logical_coupling"])
+        pf = f.with_name(f.stem + "_physical.npz")
+        if pf.exists() and info.get("embedding_used"):
+            ph = np.load(pf)
+            own = {q: int(i) for i, ch in info["embedding_used"].items() for q in ch}
+            logi = np.array([v for x, y, v in zip(ph["u"], ph["v"], ph["J"]) if own[int(x)] != own[int(y)]])
+            div = info["programmed"]["auto_scale_divisor"]
+            if logi.size and div:
+                a["prog_rms"].append(float(np.sqrt(np.mean(logi ** 2)) / div))
         h = r["info"].get("broken_chains_hist") or {}
         a["reads"] += sum(h.values())
         a["broken"] += sum(int(k) * v for k, v in h.items())
@@ -150,7 +162,9 @@ def summarize_coupling_scan(out: Path, cfg, threshold: float = 0.0, apply: bool 
                      "broken_fraction": a["broken"] / max(1, a["reads"]) / N,
                      "frac_reads_no_break": a["zero"] / max(1, a["reads"]),
                      "best_reward_polished": a["best"],
-                     "chain_strength": float(np.mean([c for c in a["chain_strength"] if c is not None] or [np.nan]))})
+                     "chain_strength": float(np.mean([c for c in a["chain_strength"] if c is not None] or [np.nan])),
+                     "c_over_max_coupling": float(np.mean(a["c_over_max"])) if a["c_over_max"] else None,
+                     "programmed_logical_rms": float(np.mean(a["prog_rms"])) if a["prog_rms"] else None})
     best = {}
     for lab in dict.fromkeys(r["backend"] for r in rows):
         for N in sorted({r["N"] for r in rows if r["backend"] == lab}):
@@ -191,7 +205,7 @@ def _plot(root: Path, rows: list[dict], best: dict) -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     labs = list(dict.fromkeys(r["backend"] for r in rows))
-    fig, axes = plt.subplots(3, len(labs), figsize=(5.2 * len(labs), 10), squeeze=False)
+    fig, axes = plt.subplots(4, len(labs), figsize=(5.2 * len(labs), 13), squeeze=False)
     cm = plt.get_cmap("viridis")
     Ns_all = sorted({r["N"] for r in rows})
     for j, lab in enumerate(labs):
@@ -201,6 +215,8 @@ def _plot(root: Path, rows: list[dict], best: dict) -> None:
             col = cm(Ns_all.index(N) / max(1, len(Ns_all) - 1))
             axes[0, j].plot(x, [r["broken_fraction"] for r in sel], "o-", color=col, label=f"N={N}")
             axes[1, j].plot(x, [r["frac_reads_no_break"] for r in sel], "o-", color=col, label=f"N={N}")
+            if all(r.get("programmed_logical_rms") for r in sel):
+                axes[3, j].plot(x, [r["programmed_logical_rms"] for r in sel], "o-", color=col, label=f"N={N}")
             ch = [r for r in sel if r.get("chosen")]
             if ch:
                 axes[0, j].plot(ch[0]["p"], ch[0]["broken_fraction"], "*", ms=14, color=col, mec="k")
@@ -212,6 +228,12 @@ def _plot(root: Path, rows: list[dict], best: dict) -> None:
         for i in (0, 1):
             axes[i, j].set_xlabel("chain-strength prefactor p (star: chosen)")
         axes[0, j].legend(fontsize=6, ncol=2)
+        axes[3, j].set_xlabel("chain-strength prefactor p")
+        axes[3, j].set_ylabel("rms of programmed SK couplings\n(QPU range [-1, 1])")
+        axes[3, j].set_yscale("log")
+        axes[3, j].axhspan(0.01, 0.03, color="#dddddd", zorder=0)
+        axes[3, j].set_title("larger p: chains hold, but the SK problem shrinks towards the\n"
+                             "control-error band (grey, order 1e-2)", fontsize=9)
         t = best.get(lab, {})
         xs = sorted(int(k) for k in t)
         axes[2, j].plot(xs, [t[str(x)] for x in xs], "s-", color="k")

@@ -21,7 +21,7 @@ cd Projects_master_HPQC/scripts/QuantumComputing/Dimod/src/unlearnable_games_exp
 ## 2. Environment (once)
 
 ```bash
-bash local/setup_env.sh               # creates .venv, installs cineca/requirements.txt, runs the 107 tests
+bash local/setup_env.sh               # creates .venv, installs cineca/requirements.txt, runs the 119 tests
 WITH_NB=1 bash local/setup_env.sh     # alternatively: + Jupyter, for the notebook
 source .venv/bin/activate             # in every new terminal
 ```
@@ -112,7 +112,7 @@ python main_simulation.py ground --out $F      # summary\ground_states.csv (also
 $F = "results\full2"
 python main_simulation.py init --preset full --out $F
 python main_simulation.py coupling-scan --out $F --Ns 8:48:8 104 --check            # estimated time, spends nothing (~4 s)
-python main_simulation.py coupling-scan --out $F --Ns 8:48:8 104 --budget-seconds 6
+python main_simulation.py coupling-scan --out $F --Ns 8:48:8 104 --budget-seconds 7
 #   -> results\full2\coupling_scan\coupling_scan.png (broken chains vs p for each N; chosen p vs N)
 #      coupling_scan.csv, best_coupling.json; the table is printed and stored in config.json
 python main_simulation.py plan --out $F                                               # shows the p used for each N
@@ -124,7 +124,18 @@ python main_simulation.py qpu --out $F --Ns 104 --budget-seconds 12             
 python main_simulation.py qpu --out $F --Ns 112:160:8 --budget-seconds 45             # Pegasus only (Zephyr max 104), ~41 s
 python main_simulation.py qpu --out $F --spent
 ```
-Options: `--prefactors 0.5 0.75 1.0 1.414 2.0` (default), `--n-instances` (default 1), `--num-reads` (default 200), `--threshold` (accepted mean fraction of broken chains, default 0), `--summary-only` (recompute the choice from saved scan results).
+Options: `--prefactors 0.75 1.0 1.414 2.0 3.0 4.0 6.0` (default; the derivation in [`../../prefactor_and_shimming.pdf`](../../prefactor_and_shimming.pdf) shows that at N ≳ 30 the chains need p ≈ 3–4, so the grid goes up to 6; ~5.4 s for the command above), `--n-instances` (default 1), `--num-reads` (default 200), `--threshold` (accepted mean fraction of broken chains, default 0), `--summary-only` (recompute the choice from saved scan results).
+
+**Shimming the QPU (`shim`): measure and correct the machine's biases.** The SK problem has no field, so every qubit must read +1 and −1 equally often; a measured magnetisation is a device bias. `shim` repeats a small call (random gauge each time), measures every qubit's magnetisation and corrects it with flux-bias offsets (D-Wave's shimming tutorial; Teza et al. for the chain-level variant). The offsets are saved and used by every later `qpu` call of that back-end. Do it after the coupling scan (it uses the chosen p), before the main run:
+```powershell
+python main_simulation.py shim --out $F --backend qpu:zephyr:clique  --N 104 --check
+python main_simulation.py shim --out $F --backend qpu:zephyr:clique  --N 104 --iterations 30 --budget-seconds 2
+python main_simulation.py shim --out $F --backend qpu:pegasus:clique --N 160 --iterations 30 --budget-seconds 2
+#   -> results\full2\shims\<backend>\fbos.json, history.json, shim_history.png
+```
+Options: `--alpha-phi` (step, default 1e-5 Φ0; `0` = only measure, change nothing), `--num-reads` (100), `--level qubit|chain`, `--no-gauge`, `--no-apply` (save the offsets but do not use them). In `shim_history.png` the magnetisation should fall to the dashed line 1/√reads (shot noise); what is above it is bias.
+
+**Extended coupler range.** `init ... --extended-j-range` lets the chains use couplings down to −2 (when the QPU offers it), so the SK couplings are compressed half as much at the same p. The code scales the problem itself and records the divisor (`info.programmed.scaling`).
 
 **Choosing the chain strength (scan).** There is no formula for the best chain-strength prefactor p: it can only be found by trying a few values on the same instances. Each value is its own small campaign (same instances, only p differs); `scan-summary` compares them. Example at N = 64, 2 instances, both QPUs, 1000 reads: 4 × 2 × 2 = 16 calls ≈ 16 × 0.24 s ≈ 4 s of QPU time:
 ```powershell

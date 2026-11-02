@@ -73,6 +73,8 @@ class CampaignConfig:
     backends: list = field(default_factory=lambda: ["qpu:zephyr:clique", "qpu:pegasus:clique"])
     chain_strength_prefactor: float = 1.414   # chain strength = prefactor x uniform torque compensation
     chain_strength_by_N: dict = field(default_factory=dict)   # {backend label: {N: p}} from coupling-scan
+    extended_j_range: bool = False  # chain couplers in the QPU's extended range (less compression)
+    flux_biases_files: dict = field(default_factory=dict)     # {backend label: shims/.../fbos.json} from shim
     chain_break_method: str = "majority_vote"  # majority_vote | minimize_energy | weighted_random | discard
     polish: bool = True             # also score every read after greedy single-flip descent
     sim_num_reads: int = 100        # reads per call when the annealer is the classical simulator
@@ -279,12 +281,18 @@ def anneal_settings(cfg: CampaignConfig, solver_name=None):
                           chain_strength_prefactor=cfg.chain_strength_prefactor,
                           chain_break_method=cfg.chain_break_method, polish=cfg.polish,
                           sim_num_reads=cfg.sim_num_reads, sim_num_sweeps=cfg.sim_num_sweeps,
-                          solver_name=solver_name)
+                          solver_name=solver_name, extended_j_range=cfg.extended_j_range)
 
 
 def make_backend(out: Path, cfg: CampaignConfig, spec: str, solver_name=None):
-    from skgame.optim.backends import AnnealBackend
-    return AnnealBackend(spec, anneal_settings(cfg, solver_name), cache_root=out / "embeddings")
+    from skgame.optim.backends import AnnealBackend, label
+    be = AnnealBackend(spec, anneal_settings(cfg, solver_name), cache_root=out / "embeddings")
+    f = (cfg.flux_biases_files or {}).get(label(spec))
+    if f and (out / f).exists():                         # flux-bias offsets learned by `shim`
+        d = json.loads((out / f).read_text())
+        be.flux_biases = {int(k): float(v) for k, v in d["fbos"].items()}
+        be.flux_biases_source = f
+    return be
 
 
 def anneal_units(out: Path, cfg: CampaignConfig, keys=None, max_N=None, Ns=None):
@@ -990,8 +998,17 @@ def validate(out: Path, cfg: CampaignConfig, log=print) -> dict:
                                                            dict(zip(edges, ph["J"].tolist())), float(ph["offset"]), "SPIN")
                         check("physical problem = embed(instance, embedding_used, chain_strength)",
                               rebuilt.is_almost_equal(saved), where)
-                        check("auto_scale divisor = max |J| of the physical problem",
-                              close(float(np.abs(ph["J"]).max()), info["programmed"]["max_abs_J_before_scaling"]), where)
+                        sc = info["programmed"].get("scaling", {"mode": "auto_scale"})
+                        if sc["mode"] == "extended_j_range":
+                            own = {q: i for i, ch in emb.items() for q in ch}
+                            chain = np.array([abs(v) for (x, y), v in zip(edges, ph["J"]) if own[x] == own[y]])
+                            logi = np.array([abs(v) for (x, y), v in zip(edges, ph["J"]) if own[x] != own[y]])
+                            expect = max(chain.max() / -sc["ext_lo"], logi.max() if logi.size else 0.0)
+                            check("extended-range divisor = max(c/|ext_lo|, max logical |J|)",
+                                  close(sc["divisor"], expect), where)
+                        else:
+                            check("auto_scale divisor = max |J| of the physical problem",
+                                  close(float(np.abs(ph["J"]).max()), info["programmed"]["max_abs_J_before_scaling"]), where)
                     if info.get("embedding_used"):
                         emb = {int(k): v for k, v in info["embedding_used"].items()}
                         t = (info.get("solver_properties") or {}).get("topology") or {}
@@ -1156,6 +1173,8 @@ def main(argv=None) -> None:
     p.add_argument("--backends", nargs="+", help="annealing back-ends, e.g. qpu:zephyr:clique qpu:pegasus:clique")
     p.add_argument("--chain-strength-prefactor", type=float, help="x uniform torque compensation (default 1.414)")
     p.add_argument("--chain-break-method", choices=["majority_vote", "minimize_energy", "weighted_random", "discard"])
+    p.add_argument("--extended-j-range", action="store_true",
+                   help="put chain couplers in the QPU's extended J range (e.g. down to -2): less compression")
     p.add_argument("--force", action="store_true", help="overwrite an existing config.json")
     sub.add_parser("plan", parents=[common], help="print sizes, tasks and the QPU budget")
     sub.add_parser("instances", parents=[common], help="write every instance J now (no internet, seconds)")
@@ -1185,7 +1204,7 @@ def main(argv=None) -> None:
     p = sub.add_parser("coupling-scan", parents=[common],
                        help="choose the chain-strength prefactor for every N by testing it on the QPU")
     p.add_argument("--Ns", nargs="+", type=parse_Ns, default=None, help="N values, e.g. 8:48:8 104")
-    p.add_argument("--prefactors", nargs="+", type=float, default=[0.5, 0.75, 1.0, 1.414, 2.0])
+    p.add_argument("--prefactors", nargs="+", type=float, default=[0.75, 1.0, 1.414, 2.0, 3.0, 4.0, 6.0])
     p.add_argument("--n-instances", type=int, default=1)
     p.add_argument("--num-reads", type=int, default=200)
     p.add_argument("--problem", nargs="+", help="problem classes to scan (default: eps0_J00)")
@@ -1196,6 +1215,18 @@ def main(argv=None) -> None:
     p.add_argument("--check", action="store_true", help="estimate the QPU time; spends nothing")
     p.add_argument("--summary-only", action="store_true", help="only (re)compute the choice from saved results")
     p.add_argument("--no-apply", action="store_true", help="do not store the chosen values in config.json")
+    p = sub.add_parser("shim", parents=[common], help="flux-bias shimming of a QPU on the SK problem (tutorial / Teza et al.)")
+    p.add_argument("--backend", required=True, help="e.g. qpu:zephyr:clique")
+    p.add_argument("--N", type=int, required=True, help="problem size whose embedding is shimmed")
+    p.add_argument("--iterations", type=int, default=30)
+    p.add_argument("--alpha-phi", type=float, default=1e-5, help="learning rate (Phi0 per unit magnetisation); 0 = diagnose only")
+    p.add_argument("--num-reads", type=int, default=100)
+    p.add_argument("--annealing-time", type=float)
+    p.add_argument("--level", choices=["qubit", "chain"], default="qubit")
+    p.add_argument("--no-gauge", action="store_true", help="no random spin-reversal gauge per iteration")
+    p.add_argument("--budget-seconds", type=float)
+    p.add_argument("--check", action="store_true", help="estimate the QPU time; spends nothing")
+    p.add_argument("--no-apply", action="store_true", help="do not use the offsets in later qpu calls")
     p = sub.add_parser("scan-summary", help="compare campaigns differing only in annealing settings (no QPU)")
     p.add_argument("--dirs", nargs="+", required=True, type=Path)
     sub.add_parser("validate", parents=[common],
@@ -1218,7 +1249,8 @@ def main(argv=None) -> None:
             cfg = make_config(a.preset, Ns=a.Ns, regimes=a.regimes, n_instances=a.n_instances,
                               num_reads=a.num_reads, annealing_time=a.annealing_time, backends=a.backends,
                               chain_strength_prefactor=a.chain_strength_prefactor,
-                              chain_break_method=a.chain_break_method)
+                              chain_break_method=a.chain_break_method,
+                              extended_j_range=True if a.extended_j_range else None)
             regimes_by_name(cfg.regimes)
             from skgame.optim.backends import parse_spec
             for spec in cfg.backends:
@@ -1262,6 +1294,12 @@ def main(argv=None) -> None:
         ground_states(out, cfg)
     elif a.cmd == "validate":
         validate(out, cfg)
+    elif a.cmd == "shim":
+        import shimming
+        shimming.run_shimming(out, cfg, a.backend, a.N, iterations=a.iterations, alpha_phi=a.alpha_phi,
+                              num_reads=a.num_reads, annealing_time=a.annealing_time, level=a.level,
+                              gauge=not a.no_gauge, budget=QPUBudget(a.budget_seconds), check_only=a.check,
+                              apply=not a.no_apply)
     elif a.cmd == "coupling-scan":
         import coupling_scan as cs
         if a.summary_only:

@@ -12,6 +12,7 @@ Everything below lives in the campaign directory (`--out`, e.g. `results\full`).
 | `game/<regime>/N0024.json` | the game's dynamics: best / mean / final reward and period (phase) for every instance and start |
 | `embeddings/<solver>/clique/N0024.json` | the cached embedding on that QPU's graph (re-validated before each use; a replaced one is kept as `*.stale.json`) |
 | `anneal/<backend>/<class>/N0024_i0.json` | **one QPU (or simulator) call**: see below |
+| `shims/<backend>/fbos.json`, `history.json`, `shim_history.png` | flux-bias offsets learned by `shim` (qubit → Φ0) and, per iteration, magnetisations, offsets, chain breaks, QPU time, chip fingerprint |
 | `summary/*.csv`, `*.png` | analysis: `summary.csv`, `backend_comparison.csv`, `chain_breaks.csv`, `ground_states.csv` |
 
 ## One annealer call: `anneal/<backend>/<class>/N…_i….json`
@@ -30,6 +31,8 @@ Everything below lives in the campaign directory (`--out`, e.g. `results\full`).
 | `info.chain_lengths`, `info.embedding` | chain lengths; qubits used, mean / max chain length |
 | `info.chain_strength` | c actually used = prefactor × J_rms × sqrt(N−1) |
 | `info.programmed` | the physical problem: `max_abs_J_before_scaling`, `auto_scale_divisor` (the QPU divides every coupler by it), `n_qubits`, `n_couplers` |
+| `info.programmed.scaling` | `mode` (`auto_scale`, or `extended_j_range` with its `divisor`: the code then scales the problem itself and sends `auto_scale=False`) |
+| `info.flux_biases` | flux-bias offsets applied (from `shim`): source file, number of non-zero offsets, rms, max |
 | `info.max_abs_logical_coupling` | max |W_ij| of the instance |
 | `info.broken_chains_hist`, `info.chain_break_count`, `info.chain_break_fraction_mean`, `info.discarded_reads` | reads with 0, 1, 2… broken chains; how often each spin's chain broke; D-Wave's mean fraction |
 | `info.physical_problem_file` | `N…_i…_physical.npz`: qubits `h_q` / fields `h`, couplers `u`, `v` / values `J`, `offset`: the exact physical Ising problem, before the QPU's auto-scaling |

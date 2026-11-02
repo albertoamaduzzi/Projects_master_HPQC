@@ -201,3 +201,36 @@ def test_coupling_scan_end_to_end_and_main_run_uses_it(tmp_path, monkeypatch):
     assert used == pytest.approx((t["8"] + t["24"]) / 2)                             # interpolated at N = 16
     tally = ms.validate(out, cfg, log=lambda *a: None)
     assert all(bad == 0 for ok, bad in tally.values())
+
+
+def test_extended_j_range_and_shimming_on_mock(tmp_path, monkeypatch):
+    """Extended J range halves the compression; shimming learns offsets and the main run uses them."""
+    import dwave.system
+    from dwave.system.testing import MockDWaveSampler
+    monkeypatch.setattr(dwave.system, "DWaveSampler",
+                        lambda solver=None, **kw: MockDWaveSampler(topology_type="zephyr", topology_shape=[3, 4]))
+    out = tmp_path / "s"
+    ms.main(["init", "--out", str(out), "--Ns", "16", "--n-instances", "1", "--regimes", "sg_satisficing",
+             "--num-reads", "50", "--backends", "qpu:zephyr:clique", "--extended-j-range",
+             "--chain-strength-prefactor", "3"])
+    ms.main(["shim", "--out", str(out), "--backend", "qpu:zephyr:clique", "--N", "16", "--iterations", "3",
+             "--num-reads", "40", "--budget-seconds", "1"])
+    import shimming
+    fb = shimming.load_fbos(out, "qpu_zephyr_clique")
+    hist = json.loads((out / "shims" / "qpu_zephyr_clique" / "history.json").read_text())
+    assert len(hist) == 3 and fb and any(abs(v) > 0 for v in fb.values())
+    # offsets follow the rule Phi <- Phi - alpha m, starting from 0, alpha = 1e-5: |Phi| <= 3e-5
+    assert max(abs(v) for v in fb.values()) <= 3e-5 + 1e-12
+    cfg = ms.load_config(out)
+    assert "qpu_zephyr_clique" in cfg.flux_biases_files
+    ms.main(["qpu", "--out", str(out), "--budget-seconds", "1"])
+    r = json.loads(next((out / "anneal" / "qpu_zephyr_clique").rglob("N0016_i0.json")).read_text())
+    info = r["info"]
+    assert info["flux_biases"]["n_nonzero"] == sum(1 for v in fb.values() if v != 0)
+    sc = info["programmed"]["scaling"]
+    assert sc["mode"] == "extended_j_range" and info["sample_kwargs"]["auto_scale"] is False
+    # chains (c ~ 3) use the extended range: divisor = c / 2, not c
+    c, wmax = info["chain_strength"], info["max_abs_logical_coupling"]
+    assert c / 2 - 1e-9 <= sc["divisor"] <= max(c / 2, wmax) + 1e-9
+    tally = ms.validate(out, cfg, log=lambda *a: None)
+    assert all(bad == 0 for ok, bad in tally.values())
