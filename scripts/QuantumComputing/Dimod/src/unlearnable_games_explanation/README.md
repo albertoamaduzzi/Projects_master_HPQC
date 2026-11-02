@@ -46,7 +46,7 @@ python -m skgame run Fig11C2vsEps --preset paper      # one figure (and only its
 python -m skgame deps Fig17OrderParameter             # upstream / downstream / derivation
 python -m skgame category                # export the category for Catlab
 python -m skgame.docgen                  # regenerate docs 02-05
-pytest                                   # 120 tests
+pytest                                   # 121 tests
 ```
 
 `quick` presets are scaled-down versions of the paper's (N ≤ 512, shorter times, fewer samples); `paper` presets use the paper's sizes where stated (N up to 1024, t up to 10^8 — hours to days). Caching: an output's hash covers its parameters, its class source code and its inputs' hashes, so editing a class recomputes exactly its downstream closure.

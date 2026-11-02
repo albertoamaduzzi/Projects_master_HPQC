@@ -267,3 +267,35 @@ def test_linear_pipeline_on_mock(tmp_path, monkeypatch):
         assert float(r["p_used"]) == float(t[r["N"]])
         assert r["reference_source"] == "exact" and r["reached_reference"] in ("True", "False")
         assert len(r["best_configuration"]) == int(r["N"])
+
+
+def test_pipeline_all_classes_and_fill(tmp_path, monkeypatch):
+    """p_opt per (class, N, machine); budget --fill sizes the reads so the run uses what is left."""
+    import csv as _csv
+    import dwave.system
+    import pipeline
+    from dwave.system.testing import MockDWaveSampler
+    monkeypatch.setattr(dwave.system, "DWaveSampler",
+                        lambda solver=None, **kw: MockDWaveSampler(topology_type="zephyr", topology_shape=[3, 4]))
+    out = tmp_path / "f"
+    ms.main(["init", "--out", str(out), "--Ns", "8,12", "--n-instances", "2", "--regimes", "ferro_easy", "sg_satisficing",
+             "--num-reads", "20", "--backends", "qpu:zephyr:clique"])
+    ms.main(["calibrate", "--out", str(out)])
+    cfg = ms.load_config(out)
+    assert set(cfg.chain_strength_by_class) == {"eps0_J03", "eps0_J00"}
+    for key in ("eps0_J03", "eps0_J00"):
+        assert set(cfg.chain_strength_by_class[key]["qpu_zephyr_clique"]) == {"8", "12"}
+    rows = list(_csv.DictReader(open(out / "calibration" / "p_opt.csv")))
+    assert len(rows) == 4 and {r["problem"] for r in rows} == {"eps0_J03", "eps0_J00"}
+    assert pipeline.missing_calibration(out, cfg) == []
+    spent_cal = pipeline.spent_in_campaign(out)["calibrate"]
+    total = spent_cal + 4.0
+    res = pipeline.budget(out, cfg, total=total, fill=True, margin=0.5, log=lambda *a: None)
+    cfg = ms.load_config(out)
+    assert cfg.num_reads == res["num_reads"] > 20
+    ms.main(["run", "--out", str(out), "--total", str(total)])
+    res_rows = list(_csv.DictReader(open(out / "results" / "sk_qpu_results.csv")))
+    assert len(res_rows) == 2 * 2 * 2                          # classes x N x instances
+    for r in res_rows:                                         # each class with its own p_opt
+        assert float(r["p_used"]) == float(cfg.chain_strength_by_class[r["problem"]]["qpu_zephyr_clique"][r["N"]])
+    assert pipeline.spent_in_campaign(out)["run"] <= total - spent_cal

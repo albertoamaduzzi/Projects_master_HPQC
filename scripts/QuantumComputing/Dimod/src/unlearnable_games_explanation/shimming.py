@@ -49,7 +49,7 @@ def run_shimming(out: Path, cfg, spec: str, N: int, iterations: int = 30, alpha_
                  gauge: bool = True, key: str | None = None, budget=None, check_only: bool = False,
                  apply: bool = True, seed: int = 11, log=print) -> dict:
     import main_simulation as ms
-    from coupling_scan import coupling_for
+    from coupling_scan import prefactor_for
     from skgame.optim.problem import PlannerProblem
 
     be = ms.make_backend(out, cfg, spec)
@@ -58,8 +58,7 @@ def run_shimming(out: Path, cfg, spec: str, N: int, iterations: int = 30, alpha_
     be.settings.num_reads = num_reads
     if annealing_time is not None:
         be.settings.annealing_time = annealing_time
-    be.settings.chain_strength_prefactor = coupling_for(cfg.chain_strength_by_N, be.label, N,
-                                                        cfg.chain_strength_prefactor)
+    be.settings.chain_strength_prefactor = prefactor_for(cfg, be.label, key or "eps0_J00", N)
     be.record_qubit_magnetization = True
     classes = {k: (k, e, j) for k, e, j in ms._classes(cfg)}
     key = key or ("eps0_J00" if "eps0_J00" in classes else next(iter(classes)))
