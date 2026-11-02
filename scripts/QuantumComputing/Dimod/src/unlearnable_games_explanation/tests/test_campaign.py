@@ -270,7 +270,7 @@ def test_linear_pipeline_on_mock(tmp_path, monkeypatch):
 
 
 def test_pipeline_all_classes_and_fill(tmp_path, monkeypatch):
-    """p_opt per (class, N, machine); budget --fill sizes the reads so the run uses what is left."""
+    """One p_opt per (machine, N) shared by every class; budget --fill sizes the reads to use what is left."""
     import csv as _csv
     import dwave.system
     import pipeline
@@ -282,22 +282,23 @@ def test_pipeline_all_classes_and_fill(tmp_path, monkeypatch):
              "--num-reads", "20", "--backends", "qpu:zephyr:clique"])
     ms.main(["calibrate", "--out", str(out)])
     cfg = ms.load_config(out)
-    assert set(cfg.chain_strength_by_class) == {"eps0_J03", "eps0_J00"}
-    for key in ("eps0_J03", "eps0_J00"):
-        assert set(cfg.chain_strength_by_class[key]["qpu_zephyr_clique"]) == {"8", "12"}
+    assert cfg.chain_strength_by_class == {} and cfg.calibration_class == "eps0_J00"
+    assert set(cfg.chain_strength_by_N["qpu_zephyr_clique"]) == {"8", "12"}
+    assert not (out / "coupling_scan" / "qpu_zephyr_clique" / "eps0_J03").exists()   # measured on one class only
     rows = list(_csv.DictReader(open(out / "calibration" / "p_opt.csv")))
-    assert len(rows) == 4 and {r["problem"] for r in rows} == {"eps0_J03", "eps0_J00"}
+    assert len(rows) == 2
     assert pipeline.missing_calibration(out, cfg) == []
     spent_cal = pipeline.spent_in_campaign(out)["calibrate"]
     total = spent_cal + 4.0
     res = pipeline.budget(out, cfg, total=total, fill=True, margin=0.5, log=lambda *a: None)
+    assert res["calibrate_left_s"] == 0
     cfg = ms.load_config(out)
     assert cfg.num_reads == res["num_reads"] > 20
     ms.main(["run", "--out", str(out), "--total", str(total)])
     res_rows = list(_csv.DictReader(open(out / "results" / "sk_qpu_results.csv")))
     assert len(res_rows) == 2 * 2 * 2                          # classes x N x instances
-    for r in res_rows:                                         # each class with its own p_opt
-        assert float(r["p_used"]) == float(cfg.chain_strength_by_class[r["problem"]]["qpu_zephyr_clique"][r["N"]])
+    for r in res_rows:                                         # the same p for both classes at each N
+        assert float(r["p_used"]) == float(cfg.chain_strength_by_N["qpu_zephyr_clique"][r["N"]])
     assert pipeline.spent_in_campaign(out)["run"] <= total - spent_cal
 
 
@@ -328,3 +329,19 @@ def test_compare_step_on_mock(tmp_path, monkeypatch):
         assert 0.0 <= float(r["P_rho_le_0"]) <= float(r["P_rho_le_0.01"]) <= float(r["P_rho_le_0.05"]) <= 1.0
         assert float(r["rho_best_median"]) >= -1e-9          # nothing beats the reference
     assert (out / "compare" / "compare.png").exists() and (out / "compare" / "reference_quality.png").exists()
+
+
+def test_feasibility_model():
+    """Verdicts follow the formulas: eps = sigma sqrt|E| p sqrt(N-1) / r, T/T_c = p / (r beta T_c)."""
+    import feasibility as fz
+    rows = fz.run("zephyr", [16, 200], sigma=0.02, beta=5.0, n=3, log=lambda *a: None)
+    r16, r200 = rows
+    assert r200["verdict"] == "NO" and "largest clique" in r200["reason"]
+    p, N = r16["p_low"], 16
+    assert r16["eps"] == pytest.approx(0.02 * np.sqrt(r16["E_mean"]) / r16["programmed_rms"], rel=1e-6)
+    assert r16["T_ratio"] == pytest.approx(p / 5.0, rel=0.05)            # D = c = p u when c > max|W|
+    good = fz.run("zephyr", [16], sigma=1e-4, beta=1e3, n=3, log=lambda *a: None)[0]
+    bad = fz.run("zephyr", [16], sigma=0.5, beta=5.0, n=3, log=lambda *a: None)[0]
+    assert good["verdict"] == "YES" and bad["verdict"] == "NO"
+    ext = fz.run("zephyr", [16], sigma=0.02, beta=5.0, extended=True, n=3, log=lambda *a: None)[0]
+    assert ext["eps"] == pytest.approx(r16["eps"] / 2, rel=0.05)         # extended range halves the error

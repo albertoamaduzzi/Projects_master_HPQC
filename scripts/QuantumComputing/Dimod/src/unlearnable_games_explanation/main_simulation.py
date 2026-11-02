@@ -74,6 +74,7 @@ class CampaignConfig:
     chain_strength_prefactor: float = 1.414   # chain strength = prefactor x uniform torque compensation
     chain_strength_by_N: dict = field(default_factory=dict)   # {backend label: {N: p}} from coupling-scan
     chain_strength_by_class: dict = field(default_factory=dict)  # {problem class: {backend label: {N: p}}}
+    calibration_class: str | None = None   # problem class the shared calibration was measured on
     extended_j_range: bool = False  # chain couplers in the QPU's extended range (less compression)
     flux_biases_files: dict = field(default_factory=dict)     # {backend label: shims/.../fbos.json} from shim
     chain_break_method: str = "majority_vote"  # majority_vote | minimize_energy | weighted_random | discard
@@ -1237,7 +1238,7 @@ def main(argv=None) -> None:
     p = sub.add_parser("calibrate", parents=[common], help="PIPELINE 1: p_opt for every (N, machine) of the config")
     p.add_argument("--budget-seconds", type=float)
     p.add_argument("--threshold", type=float, default=0.0, help="accepted fraction of broken chains (default 0)")
-    p.add_argument("--problem", nargs="+", help="only these problem classes (default: all of the config)")
+    p.add_argument("--problem", help="class the shared calibration is measured on (default eps0_J00, pure SK)")
     p.add_argument("--check", action="store_true", help="estimate only; spends nothing")
     p = sub.add_parser("run", parents=[common], help="PIPELINE 2: anneal every N with its p_opt, then report")
     p.add_argument("--budget-seconds", type=float)
@@ -1250,6 +1251,19 @@ def main(argv=None) -> None:
                        help="PIPELINE 4: QPU planner vs classical solvers vs the game, easy -> hard (no QPU)")
     p.add_argument("--deltas", nargs="+", type=float, default=[0.0, 0.01, 0.02, 0.05],
                    help="residual thresholds for the success probabilities (0 = exact)")
+    p = sub.add_parser("feasibility", help="yes / marginal / no: can a QPU represent this problem? (no QPU, no campaign)")
+    p.add_argument("--topology", default="zephyr", choices=["zephyr", "pegasus"])
+    p.add_argument("--N", nargs="+", type=parse_Ns, required=True, help="sizes, e.g. 16 64 104 or 8:176:8")
+    p.add_argument("--eps", type=float, default=0.0)
+    p.add_argument("--J0", type=float, default=0.0)
+    p.add_argument("--J-file", help="npz with J (one or more instances) instead of the ensemble (single N)")
+    p.add_argument("--sigma", type=float, default=0.02, help="control error per coupler (assumed; default 0.02)")
+    p.add_argument("--beta", type=float, default=5.0, help="effective inverse temperature, programmed units (assumed)")
+    p.add_argument("--extended-j-range", action="store_true")
+    p.add_argument("--eps-ok", type=float, default=0.3)
+    p.add_argument("--t-ok", type=float, default=0.3)
+    p.add_argument("--instances", type=int, default=8)
+    p.add_argument("--plot", help="write a figure here")
     p = sub.add_parser("scan-summary", help="compare campaigns differing only in annealing settings (no QPU)")
     p.add_argument("--dirs", nargs="+", required=True, type=Path)
     sub.add_parser("validate", parents=[common],
@@ -1260,6 +1274,12 @@ def main(argv=None) -> None:
                    help="broken chains per read and solution quality vs number of broken chains (no QPU)")
     a = ap.parse_args(argv)
 
+    if a.cmd == "feasibility":
+        import feasibility
+        feasibility.run(a.topology, sorted({n for g in a.N for n in g}), eps=a.eps, J0=a.J0, sigma=a.sigma, beta=a.beta,
+                        extended=a.extended_j_range, eps_ok=a.eps_ok, t_ok=a.t_ok, n=a.instances,
+                        J_file=a.J_file, plot=a.plot)
+        return
     if a.cmd == "scan-summary":
         scan_summary(a.dirs)
         return
@@ -1324,7 +1344,7 @@ def main(argv=None) -> None:
         elif a.cmd == "budget":
             pipeline.budget(out, cfg, total=a.total, fill=a.fill, margin=a.margin)
         elif a.cmd == "calibrate":
-            pipeline.calibrate(out, cfg, budget_s=a.budget_seconds, check=a.check, threshold=a.threshold, keys=a.problem)
+            pipeline.calibrate(out, cfg, budget_s=a.budget_seconds, check=a.check, threshold=a.threshold, key=a.problem)
         elif a.cmd == "run":
             bs = a.budget_seconds
             if a.total is not None:

@@ -4,8 +4,8 @@
 **Output:** for every (machine, problem class, N, instance): the best configuration found (ground-state candidate), its energy, its reward R_N, and whether it equals the reference optimum.
 
 ```
-list of N ──► 0. budget ──► 1. calibrate ──► p_opt(class, N, machine) ──► 1b. budget --fill ──► 2. run ──► 3. report
-              (no QPU)      (QPU, ~37 s)     calibration/p_opt.csv        (no QPU: sets reads)   (QPU, the rest)  results/sk_qpu_results.csv
+list of N ──► 0. budget ──► 1. calibrate ──► p_opt(N, machine) ──► 1b. budget --fill ──► 2. run ──► 3. report
+              (no QPU)      (QPU, ~9 s)      calibration/p_opt.csv (no QPU: sets reads)   (QPU, the rest)  results/sk_qpu_results.csv
 ```
 
 Each step is resumable: rerunning a command skips what is already saved. Every QPU command has a hard cap, `--budget-seconds`.
@@ -23,7 +23,7 @@ So p does not multiply the logical couplings. It sets how strong the chains are 
 * p too small: chains break and the read is not a valid assignment of the N agents (it is repaired by majority vote).
 * p too large: the SK couplings become tiny compared with the QPU's analogue noise.
 
-The best p depends on N and on the embedding, so on the machine. Calibration finds, for every problem class too, **p_opt(N, machine) = the smallest p of the grid 0.75, 1, 1.414, 2, 3, 4, 6 with no broken chain in any of 200 reads**. It climbs the grid from the smallest p and stops as soon as one p meets the rule. The derivation of why p ≈ 3–4 is expected at large N is in [`../../prefactor_and_shimming.pdf`](../../prefactor_and_shimming.pdf).
+The best p depends on N and on the embedding, so on the machine. Calibration finds, once per machine and N and shared by every problem class, **p_opt(N, machine) = the smallest p of the grid 0.75, 1, 1.414, 2, 3, 4, 6 with no broken chain in any of 200 reads**. It climbs the grid from the smallest p and stops as soon as one p meets the rule. The derivation of why p ≈ 3–4 is expected at large N is in [`../../prefactor_and_shimming.pdf`](../../prefactor_and_shimming.pdf).
 
 ## The commands (PowerShell; in bash write `F=results/sk`)
 
@@ -38,8 +38,8 @@ python main_simulation.py init --preset full --out $F --Ns 8:160:8 --n-instances
 # 0. predicted cost (no QPU)
 python main_simulation.py budget --out $F --total 178
 
-# 1. calibration: p_opt for every (problem class, N, machine)
-python main_simulation.py calibrate --out $F --budget-seconds 55
+# 1. calibration: one p_opt for every (N, machine), shared by all problem classes
+python main_simulation.py calibrate --out $F --budget-seconds 15
 #    -> results\sk\calibration\p_opt.csv and p_opt.png; the table is stored in config.json
 
 # 1b. size the run to spend everything that is left (no QPU): sets num_reads in config.json
@@ -55,10 +55,10 @@ python main_simulation.py report --out $F
 ```
 
 * `--Ns 8:160:8` means 8, 16, …, 160. Zephyr embeds the full SK problem up to N = 104, so larger N run on Pegasus only (up to 177). Both steps skip the N a machine cannot embed.
-* **Why calibrate per problem class:** p_opt depends on the field the chains feel. The ferromagnetic class (J0 = 3) has fields about 3× larger in its ordered ground state, so it needs a larger p than the pure SK class. `run` uses, for every call, the p_opt of its own (class, N, machine). It refuses to start if one is missing.
+* **One calibration per (topology, N), shared by every class.** The embedding (the chains) depends only on the machine and N, so p_opt is measured once, on the pure SK class (`calibrate --problem KEY` to choose another one), and `run` uses it for every class. It refuses to start if a (N, machine) is missing. Caveat: the chains feel the fields of the problem, and the ferromagnetic class (J0 = 3) has larger ones. Measured largest field in units of J_rms·√(N−1): 3.69 for SK and 5.23 for J0 = 3 at N = 104. So its chains can break somewhat more often at the shared p. `report` and `compare` show the broken-chain fraction per class, so this is visible, not hidden.
 * **`budget --fill`** computes the reads per call that make step 2 spend: total − already spent − calibration still to do − 3 s margin (`--margin`). One call cannot exceed the QPU's 1 s limit, so the reads are capped at that, and the cap is printed. Run it after `calibrate`; before calibration, it reserves the worst-case calibration cost.
 * If a step stops at its budget, rerun the same command: it continues where it stopped. N are done in increasing order, all classes and both machines at each N.
-* To run only some classes: `init ... --regimes sg_satisficing` (pure SK) or `calibrate --problem eps0_J00`.
+* To run only some classes: `init ... --regimes sg_satisficing` (pure SK) or choose the calibration class with `calibrate --problem eps0_J00`.
 
 ## What the output contains
 
@@ -99,17 +99,33 @@ The question: how well does the QPU act as the **central planner** (it picks eve
 
  (≈178 s, all 4 classes)
 
-* **Calibration.** Zephyr N = 8…104 is 13 N; Pegasus N = 8…160 is 20 N, so 33 (N, machine) pairs. With 4 classes that is 132 calibrations.
+* **Calibration.** Zephyr N = 8…104 is 13 N; Pegasus N = 8…160 is 20 N, so 33 (N, machine) pairs, shared by the 4 classes.
   * One call: ≈ 15.8 ms + 200 reads × 0.2 ms ≈ 55.8 ms.
-  * Upper bound, all 7 p: 132 × 7 × 0.0558 ≈ **51.6 s**.
-  * Expected, since the climb stops at p_opt ≈ 3 (the 5th value): 132 × 5 × 0.0558 ≈ **37 s**.
-* **Run, filled.** Left: 178 − 37 − 3 (margin) ≈ 138 s.
+  * Upper bound, all 7 p: 33 × 7 × 0.0558 ≈ **12.9 s**.
+  * Expected, since the climb stops at p_opt ≈ 3 (the 5th value): 33 × 5 × 0.0558 ≈ **9.2 s**.
+* **Run, filled.** Left: 178 − 9.2 − 3 (margin) ≈ 165.8 s.
   * Calls: 4 classes × 33 pairs × 5 instances = 660.
   * Fixed part: 660 × 15.8 ms ≈ 10.4 s.
   * Each read costs ≈ 0.2 ms per call, so 660 × 0.2 ms ≈ 0.132 s per read of every call.
-  * Reads per call: (138 − 10.4) / 0.132 ≈ **≈ 960** (the readout is longer for large N, so `--fill` will find somewhat fewer).
+  * Reads per call: (165.8 − 10.4) / 0.132 ≈ **≈ 1180** (the readout is longer for large N, so `--fill` will find somewhat fewer).
 * `budget` and `budget --fill` print the exact figures from each machine's timing model.
 
 ## Optional extras (not needed for the pipeline)
 * `shim` (flux-bias shimming) and `--extended-j-range`: see README_LOCAL.md and prefactor_and_shimming.pdf.
 * `validate`, `ground`, `chains`, `analyze`: checks and figures on the same directory, no QPU.
+
+## Before spending QPU time: is the problem feasible at all? (`feasibility`, no QPU)
+
+```powershell
+python main_simulation.py feasibility --topology zephyr  --N 16 32 64 104
+python main_simulation.py feasibility --topology pegasus --N 16 64 104 160 --J0 3 --plot feas.png
+python main_simulation.py feasibility --topology zephyr  --N 64 104 --extended-j-range --sigma 0.01
+```
+For each N it prints YES / MARGINAL / NO and why. It combines:
+- the chain length of the clique embedding;
+- the chain coupling the problem's fields require (p_low);
+- the compression into the hardware range;
+- the control error σ;
+- the effective temperature of the machine.
+
+It also prints the σ and β_eff the problem **would need** for a YES. σ (default 0.02) and β_eff (default 5) are assumed orders of magnitude, not measurements. YES is a necessary condition for a faithful, cold sampler; it does not promise that the QPU beats classical solvers. The formulas are in the docstring of `feasibility.py`.
