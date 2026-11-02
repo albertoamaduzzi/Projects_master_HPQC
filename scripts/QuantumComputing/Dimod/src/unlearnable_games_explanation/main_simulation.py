@@ -1251,6 +1251,19 @@ def main(argv=None) -> None:
                        help="PIPELINE 4: QPU planner vs classical solvers vs the game, easy -> hard (no QPU)")
     p.add_argument("--deltas", nargs="+", type=float, default=[0.0, 0.01, 0.02, 0.05],
                    help="residual thresholds for the success probabilities (0 = exact)")
+    p = sub.add_parser("feasibility", help="yes / marginal / no: can a QPU represent this problem? (no QPU, no campaign)")
+    p.add_argument("--topology", default="zephyr", choices=["zephyr", "pegasus"])
+    p.add_argument("--N", nargs="+", type=parse_Ns, required=True, help="sizes, e.g. 16 64 104 or 8:176:8")
+    p.add_argument("--eps", type=float, default=0.0)
+    p.add_argument("--J0", type=float, default=0.0)
+    p.add_argument("--J-file", help="npz with J (one or more instances) instead of the ensemble (single N)")
+    p.add_argument("--sigma", type=float, default=0.02, help="control error per coupler (assumed; default 0.02)")
+    p.add_argument("--beta", type=float, default=5.0, help="effective inverse temperature, programmed units (assumed)")
+    p.add_argument("--extended-j-range", action="store_true")
+    p.add_argument("--eps-ok", type=float, default=0.3)
+    p.add_argument("--t-ok", type=float, default=0.3)
+    p.add_argument("--instances", type=int, default=8)
+    p.add_argument("--plot", help="write a figure here")
     p = sub.add_parser("scan-summary", help="compare campaigns differing only in annealing settings (no QPU)")
     p.add_argument("--dirs", nargs="+", required=True, type=Path)
     sub.add_parser("validate", parents=[common],
@@ -1261,6 +1274,12 @@ def main(argv=None) -> None:
                    help="broken chains per read and solution quality vs number of broken chains (no QPU)")
     a = ap.parse_args(argv)
 
+    if a.cmd == "feasibility":
+        import feasibility
+        feasibility.run(a.topology, sorted({n for g in a.N for n in g}), eps=a.eps, J0=a.J0, sigma=a.sigma, beta=a.beta,
+                        extended=a.extended_j_range, eps_ok=a.eps_ok, t_ok=a.t_ok, n=a.instances,
+                        J_file=a.J_file, plot=a.plot)
+        return
     if a.cmd == "scan-summary":
         scan_summary(a.dirs)
         return

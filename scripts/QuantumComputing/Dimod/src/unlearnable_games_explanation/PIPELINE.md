@@ -113,3 +113,19 @@ The question: how well does the QPU act as the **central planner** (it picks eve
 ## Optional extras (not needed for the pipeline)
 * `shim` (flux-bias shimming) and `--extended-j-range`: see README_LOCAL.md and prefactor_and_shimming.pdf.
 * `validate`, `ground`, `chains`, `analyze`: checks and figures on the same directory, no QPU.
+
+## Before spending QPU time: is the problem feasible at all? (`feasibility`, no QPU)
+
+```powershell
+python main_simulation.py feasibility --topology zephyr  --N 16 32 64 104
+python main_simulation.py feasibility --topology pegasus --N 16 64 104 160 --J0 3 --plot feas.png
+python main_simulation.py feasibility --topology zephyr  --N 64 104 --extended-j-range --sigma 0.01
+```
+For each N it prints YES / MARGINAL / NO and why. It combines:
+- the chain length of the clique embedding;
+- the chain coupling the problem's fields require (p_low);
+- the compression into the hardware range;
+- the control error σ;
+- the effective temperature of the machine.
+
+It also prints the σ and β_eff the problem **would need** for a YES. σ (default 0.02) and β_eff (default 5) are assumed orders of magnitude, not measurements. YES is a necessary condition for a faithful, cold sampler; it does not promise that the QPU beats classical solvers. The formulas are in the docstring of `feasibility.py`.

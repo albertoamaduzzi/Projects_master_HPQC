@@ -329,3 +329,19 @@ def test_compare_step_on_mock(tmp_path, monkeypatch):
         assert 0.0 <= float(r["P_rho_le_0"]) <= float(r["P_rho_le_0.01"]) <= float(r["P_rho_le_0.05"]) <= 1.0
         assert float(r["rho_best_median"]) >= -1e-9          # nothing beats the reference
     assert (out / "compare" / "compare.png").exists() and (out / "compare" / "reference_quality.png").exists()
+
+
+def test_feasibility_model():
+    """Verdicts follow the formulas: eps = sigma sqrt|E| p sqrt(N-1) / r, T/T_c = p / (r beta T_c)."""
+    import feasibility as fz
+    rows = fz.run("zephyr", [16, 200], sigma=0.02, beta=5.0, n=3, log=lambda *a: None)
+    r16, r200 = rows
+    assert r200["verdict"] == "NO" and "largest clique" in r200["reason"]
+    p, N = r16["p_low"], 16
+    assert r16["eps"] == pytest.approx(0.02 * np.sqrt(r16["E_mean"]) / r16["programmed_rms"], rel=1e-6)
+    assert r16["T_ratio"] == pytest.approx(p / 5.0, rel=0.05)            # D = c = p u when c > max|W|
+    good = fz.run("zephyr", [16], sigma=1e-4, beta=1e3, n=3, log=lambda *a: None)[0]
+    bad = fz.run("zephyr", [16], sigma=0.5, beta=5.0, n=3, log=lambda *a: None)[0]
+    assert good["verdict"] == "YES" and bad["verdict"] == "NO"
+    ext = fz.run("zephyr", [16], sigma=0.02, beta=5.0, extended=True, n=3, log=lambda *a: None)[0]
+    assert ext["eps"] == pytest.approx(r16["eps"] / 2, rel=0.05)         # extended range halves the error
