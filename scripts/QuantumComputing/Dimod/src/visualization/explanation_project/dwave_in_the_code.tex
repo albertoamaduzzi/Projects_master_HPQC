@@ -24,6 +24,7 @@
   backgroundcolor=\color{gray!6},showstringspaces=false,keepspaces=true}
 \lstset{style=sh}
 % \src{file relative to unlearnable_games_explanation}{first}{last}{caption}
+\input{code_ranges}
 \newcommand{\src}[4]{\lstinputlisting[style=py,firstline=#2,lastline=#3,firstnumber=#2,
   title={\footnotesize\code{#1}, lines #2--#3: #4}]{../../unlearnable_games_explanation/#1}}
 
@@ -136,7 +137,7 @@ For each package: what it offers, then exactly how this project uses it.
 \item \code{MockDWaveSampler} is used in the tests and in the dry runs.
 \end{itemize}
 
-\src{skgame/optim/backends.py}{84}{114}{building the child sampler (QPU, embedded simulator or logical simulator) and reading its hardware graph}
+\src{skgame/optim/backends.py}{\rHardwareA}{\rHardwareB}{building the child sampler (QPU, embedded simulator or logical simulator) and reading its hardware graph}
 
 \subsection{\texorpdfstring{\code{dimod}}{dimod}: the problem and the results}
 \textbf{Capabilities.}
@@ -153,7 +154,7 @@ For each package: what it offers, then exactly how this project uses it.
 \item \code{StructureComposite} restricts simulated annealing to the Zephyr or Pegasus graph (the \code{sim:*:clique} back-ends).
 \item \code{ExactSolver} checks the statistics code in the tests.
 \end{itemize}
-\src{skgame/optim/problem.py}{45}{50}{the SK problem as a dimod BQM ($h=0$, $J_{ij}=-W_{ij}$)}
+\src{skgame/optim/problem.py}{\rTobqmA}{\rTobqmB}{the SK problem as a dimod BQM ($h=0$, $J_{ij}=-W_{ij}$)}
 
 \subsection{\texorpdfstring{\code{minorminer}}{minorminer} and \texorpdfstring{\code{dwave-graphs}}{dwave-graphs}: embeddings and hardware graphs}
 \textbf{Capabilities.}
@@ -170,8 +171,8 @@ For each package: what it offers, then exactly how this project uses it.
 \item The heuristic baseline.
 \item The ideal graphs for the simulator and for the figures in \code{visualization/embedding_explanation}.
 \end{itemize}
-\src{skgame/optim/embedding.py}{101}{115}{the all-to-all strategy: embedding and largest clique}
-\src{skgame/optim/embedding.py}{157}{164}{chain statistics; \code{n_qubits} feeds the readout-time model}
+\src{skgame/optim/embedding.py}{\rCliqueA}{\rCliqueB}{the all-to-all strategy: embedding and largest clique}
+\src{skgame/optim/embedding.py}{\rChainstatsA}{\rChainstatsB}{chain statistics; \code{n_qubits} feeds the readout-time model}
 
 \subsection{\texorpdfstring{\code{dwave.embedding}}{dwave.embedding} (inside \texorpdfstring{\code{dwave-system}}{dwave-system}): chains in and out}
 \textbf{Capabilities.}
@@ -188,8 +189,8 @@ For each package: what it offers, then exactly how this project uses it.
 \item The chain-break method is chosen by name.
 \item \code{MinimizeEnergy} has to be wrapped in a named function, because \code{unembed_sampleset} reads \code{__name__}. Testing revealed this.
 \end{itemize}
-\src{skgame/optim/backends.py}{147}{152}{the keyword arguments for the physical sampler}
-\src{skgame/optim/backends.py}{211}{221}{chain-break resolution by name}
+\src{skgame/optim/backends.py}{\rKwargsA}{\rKwargsB}{the keyword arguments for the physical sampler}
+\src{skgame/optim/backends.py}{\rCbmA}{\rCbmB}{chain-break resolution by name}
 
 \subsection{\texorpdfstring{\code{dwave-samplers}}{dwave-samplers} and \texorpdfstring{\code{dwave-preprocessing}}{dwave-preprocessing}}
 \textbf{Capabilities.}
@@ -219,7 +220,7 @@ mock QPU (tests) & \code{MockDWaveSampler} in place of \code{DWaveSampler}, same
 \code{QuantumAnnealingSolver} & \code{DWaveCliqueSampler} (clique, extended $J$ range) or \code{EmbeddingComposite} (heuristic each call) & the planner benchmark (\code{skgame/optim/benchmark.py}) & yes / yes \\
 \bottomrule
 \end{longtable}
-\src{skgame/optim/quantum.py}{49}{58}{the single-solver path: \code{DWaveCliqueSampler} or \code{EmbeddingComposite}}
+\src{skgame/optim/quantum.py}{\rMakesamplerA}{\rMakesamplerB}{the single-solver path: \code{DWaveCliqueSampler} or \code{EmbeddingComposite}}
 
 The campaign embeds explicitly (the steps of \code{FixedEmbeddingComposite}) rather than using \code{DWaveCliqueSampler}, so that both topologies run
 \emph{identical} code: same embedding strategy, same chain-strength rule, same scaling. Their results then differ only because of the hardware.
@@ -227,7 +228,7 @@ The campaign embeds explicitly (the steps of \code{FixedEmbeddingComposite}) rat
 %=====================================================================================
 \section{Life of one QPU call, line by line}
 %=====================================================================================
-\src{skgame/optim/backends.py}{154}{199}{\code{AnnealBackend.sample}: embed, sample, keep the physical reads, unembed}
+\src{skgame/optim/backends.py}{\rSampleA}{\rSampleB}{\code{AnnealBackend.sample}: embed, sample, keep the physical reads, unembed}
 What happens, in order:
 \begin{enumerate}
 \item \code{P.to_bqm()}: the SK problem as an Ising BQM.
@@ -240,12 +241,12 @@ What happens, in order:
 \item \code{sampleset_statistics} recomputes every reward from the spins: it is exact whatever scaling was applied. It aggregates identical reads, records \code{info["timing"]} (in $\mu$s) and the read-averaged chain-break fraction, and optionally polishes every distinct read with greedy descent.
 \item The embedding statistics, the chain strength actually used (from \code{embedding_context}) and $\max|W_{ij}|$ are added.
 \end{enumerate}
-\src{skgame/optim/backends.py}{224}{295}{statistics of a sample set, including the broken chains of every read}
+\src{skgame/optim/backends.py}{\rStatsA}{\rStatsB}{statistics of a sample set, including the broken chains of every read}
 
 \paragraph{The \code{seed} lesson.} Samplers differ in which arguments they accept. The QPU rejects unknown ones
 \emph{server-side}, so a Python \code{try/except TypeError} would never catch the error. Both wrappers therefore
 pass \code{seed} only to samplers that declare it in \code{parameters}:
-\src{skgame/optim/solvers.py}{379}{388}{passing \code{seed} only where it is accepted}
+\src{skgame/optim/solvers.py}{\rSeedA}{\rSeedB}{passing \code{seed} only where it is accepted}
 
 %=====================================================================================
 \section{What \texorpdfstring{\code{qpu --check}}{qpu --check} does (and why it costs nothing)}
@@ -257,8 +258,8 @@ pass \code{seed} only to samplers that declare it in \code{parameters}:
 \item The list of calls is built. $N$ above the largest clique is skipped; already-saved results are skipped (resume).
 \item \code{_estimate_qpu_time} computes, for each $N$, the clique embedding on the real graph and the number of qubits it uses, then evaluates \code{solver.estimate_qpu_access_time}: \textbf{a local formula, no QPU}.
 \end{enumerate}
-\src{main_simulation.py}{445}{458}{the \code{--check} estimate}
-\src{skgame/optim/backends.py}{201}{208}{one call's estimate from the solver's timing model}
+\src{main_simulation.py}{\rEstcheckA}{\rEstcheckB}{the \code{--check} estimate}
+\src{skgame/optim/backends.py}{\rEstaccessA}{\rEstaccessB}{one call's estimate from the solver's timing model}
 
 \paragraph{Your check (27 October).}
 \begin{table}[H]\centering\small
@@ -305,13 +306,13 @@ Above all, the time is \textbf{proportional to \code{num_reads}} apart from the 
 After each call the QPU returns its timing. \code{qpu_access_time} is what Leap charges. It is saved in every result
 file together with the level-2 estimate (\code{estimated_access_s}), and \code{qpu --spent} sums them and prints the ratio
 actual/estimate:
-\src{main_simulation.py}{427}{442}{\code{qpu --spent}: what was actually charged}
+\src{main_simulation.py}{\rSpentA}{\rSpentB}{\code{qpu --spent}: what was actually charged}
 
 %=====================================================================================
 \section{The budget guard: \texorpdfstring{\code{qpu --budget-seconds S}}{qpu --budget-seconds S}}
 %=====================================================================================
-\src{main_simulation.py}{331}{362}{budget object and per-call estimate}
-\src{main_simulation.py}{377}{424}{the anneal stage: guard before every call, real charge after it}
+\src{main_simulation.py}{\rBudgetA}{\rBudgetB}{budget object and per-call estimate}
+\src{main_simulation.py}{\rAnnealA}{\rAnnealB}{the anneal stage: guard before every call, real charge after it}
 Rule: before each call, with $\hat t$ the level-2 estimate,
 \begin{equation}
 \text{call allowed}\iff t_{\rm spent}+f\,\hat t\le S,\qquad f=\max\big(1.5,\ 1.1\cdot\max_{\rm past\ calls}t_{\rm actual}/\hat t\big).
@@ -342,7 +343,7 @@ Leap project. The Leap dashboard remains the authority on what is left.
 A chain of spin $i$ is \emph{broken} in a read when its qubits do not all agree. Its logical value is then decided by the chain-break method (majority vote by default). The fraction D-Wave reports, \code{chain_break_fraction}, is exactly (broken chains)/$N$, and the code checks this.
 
 \paragraph{Analysis.} \code{python main_simulation.py chains --out DIR} (also run by \code{analyze}, and usable before the classical stage) writes \code{summary/chain_breaks.csv} and \code{chain_breaks.png}. For each back-end, $N$ and number of broken chains $k$ they give the fraction of reads, the success probability, and the mean residual, raw and after polishing. The reference is the exact or classical optimum when available, otherwise the best read seen.
-\src{main_simulation.py}{705}{760}{solution quality vs number of broken chains}
+\src{main_simulation.py}{\rCbtA}{\rCbtB}{solution quality vs number of broken chains}
 \paragraph{Example (classical simulator, deliberately weak chains $p=0.5$).} At $N=16$ on Pegasus, 70\% of the reads have no broken chain and hit the optimum in 88\% of cases. Reads with one or more broken chains never do, raw. Greedy polishing brings those with 1--2 broken chains back to 84--96\%. The residual grows almost linearly with the number of broken chains. On the real QPU, with the default $p=1.414$, the test of 27 October had chain-break fractions of 0 and 0.001 at $N\le16$.
 
 %=====================================================================================
@@ -356,9 +357,53 @@ A chain of spin $i$ is \emph{broken} in a read when its qubits do not all agree.
 \item for every source (classical reference, each annealer raw and polished) whether that source found it, and its Hamming distance from it.
 \end{itemize}
 The classical stage now saves the reference \emph{configuration} (\code{ref_S}, \code{ref_source}) and not only its value. Each QPU result file already holds \code{best_S} and \code{polished_best_S}.
-\src{main_simulation.py}{832}{894}{the ground-state report}
+\src{main_simulation.py}{\rGroundA}{\rGroundB}{the ground-state report}
 
 \paragraph{When the QPU's graph changes.} A QPU's working graph changes over time as qubits and couplers go offline or come back. On 2 November the Zephyr chip's largest clique was 105, against 104 on 27 October. An embedding cached on an earlier day may then contain a chain that is no longer connected (\code{DisconnectedChainError}). \code{EmbeddingCache.get} therefore re-validates every cached embedding against the current graph (\code{is_valid_embedding}), recomputes it if it no longer fits, and keeps the old file as \code{N....stale.json}. Errors in the embedding or the problem are no longer retried (\code{_transient}), and they occur before any QPU time is used.
+
+%=====================================================================================
+\section{Chain strength and coupling scale: what is set, and what is not known}
+%=====================================================================================
+\paragraph{What is set.} The chain strength is $c=p\,J_{\rm rms}\sqrt{N-1}\approx p$ for SK, with the prefactor $p$ (\code{chain_strength_prefactor}, default 1.414) the only free knob. The logical couplings $W_{ij}$ are split evenly over the $|E_{ij}|$ couplers between chains (about 1.1--1.2), and \code{auto_scale} divides the whole physical problem by its largest $|J|$. With the default $p$ that is the chain coupling $c$, so the SK couplings end up at about $0.05$ on $[-1,1]$. With a small $p$ (e.g.\ 0.5) the largest coupling can be a logical one, as the tests show, and then the logical couplings are no longer the ones compressed by $c$.
+
+\paragraph{What is not known in advance.} There is no formula for the best $p$:
+\begin{itemize}
+\item too small, and chains break: their spins are guessed by the chain-break method;
+\item too large, and chains are rigid and the SK part is squeezed towards the analogue noise.
+\end{itemize}
+The optimum depends on $N$, on the instance class and on the chip. The same holds for the chain-break method and the annealing time. The default is a well-founded starting point, not an optimum. On the QPU it can only be found empirically: run a few values of $p$ on the same instances and compare the success rate together with the broken-chain statistics. \code{scan-summary} does this comparison across campaign directories that differ only in $p$ (README\_LOCAL.md gives the commands).
+
+\paragraph{What is recorded to judge it.} For every call:
+\begin{itemize}
+\item $c$ and the auto-scale divisor;
+\item the per-read broken chains and which chains break;
+\item the exact physical problem sent (couplers and values, \code{*_physical.npz}).
+\end{itemize}
+A rule of thumb from D-Wave's guidance: chain-break fractions of a few per cent or less, with the success rate still rising as $p$ decreases, mean there is room to lower $p$.
+
+%=====================================================================================
+\section{Reproducibility: everything needed to reconstruct a call}
+%=====================================================================================
+Each call saves:
+\begin{itemize}
+\item the problem id and label (findable in the Leap dashboard);
+\item the solver identity, ranges and a fingerprint of the working graph at that moment;
+\item the embedding actually used;
+\item the chain strength;
+\item the exact physical problem (\code{N....\_physical.npz}: qubits, couplers, values before scaling) and the auto-scale divisor;
+\item every distinct configuration read, with its reward, polished reward and number of broken chains.
+\end{itemize}
+The instances (full $J$ matrices) and the configuration are saved once per campaign. \code{RESULTS_FORMAT.md} documents every field.
+
+\code{python main_simulation.py validate --out DIR} re-derives everything from these inputs:
+\begin{itemize}
+\item the reward of every stored configuration, and the exact optimum for $N\le24$;
+\item the read counts, and the broken-chain counts against D-Wave's \code{chain_break_fraction};
+\item the chain strength from the formula;
+\item the physical problem: re-embedding the instance with the saved embedding and chain strength reproduces the saved one exactly;
+\item that every embedding is a valid minor of $K_N$ on the solver's own topology.
+\end{itemize}
+\src{main_simulation.py}{\rValidateA}{\rValidateB}{\code{validate}}
 
 %=====================================================================================
 \section{Ising or QUBO? And is the problem trivial?}
@@ -369,7 +414,7 @@ H&=-\sum_{i<j}W_{ij}S_iS_j=-\sum_{i<j}W_{ij}(2x_i-1)(2x_j-1)\nonumber\\
 &=\sum_{i<j}(-4W_{ij})\,x_ix_j+\sum_i\Big(2\sum_{j\ne i}W_{ij}\Big)x_i-\sum_{i<j}W_{ij}.
 \end{align}
 So $Q_{ij}=-4W_{ij}$, $Q_{ii}=2\sum_{j\ne i}W_{ij}$, and the offset is $-\sum_{i<j}W_{ij}$. The minimiser is the same (via $x=(S+1)/2$), and so is every energy. \code{PlannerProblem.to_qubo} returns this form. A test checks it against the Ising form on all $2^9$ configurations of an instance, and checks that dimod's \code{change_vartype} turns one into the other. Sending the QUBO instead would change nothing: dimod converts it to the same Ising problem.
-\src{skgame/optim/problem.py}{52}{64}{the QUBO form}
+\src{skgame/optim/problem.py}{\rQuboA}{\rQuboB}{the QUBO form}
 
 \paragraph{Is it trivial?} The problem is not:
 \begin{itemize}
@@ -381,7 +426,7 @@ What \emph{is} trivial is the 1-second test: $N=8,16$ is solved exactly by a lap
 %=====================================================================================
 \section{From reads to results}
 %=====================================================================================
-\src{main_simulation.py}{498}{528}{per back-end metrics in \code{collect}}
+\src{main_simulation.py}{\rCollectA}{\rCollectB}{per back-end metrics in \code{collect}}
 For each problem class, $N$ and instance $b$, with reference $R_{\rm ref}$ (exact for $N\le24$; otherwise the best of the classical solvers and of every annealer read, polished reads included):
 \begin{align}
 p_{\rm success}&=\frac{\#\{\text{reads with }R\ge R_{\rm ref}-10^{-9}\}}{n_{\rm reads}}\quad\text{(per read)},\\
@@ -389,7 +434,7 @@ p_{\rm success}&=\frac{\#\{\text{reads with }R\ge R_{\rm ref}-10^{-9}\}}{n_{\rm 
 t_{\rm read}&=\frac{t_{\rm sampling}}{n_{\rm reads}}\quad(t_{\rm sampling}=\text{\code{qpu_sampling_time}}),\\
 \text{TTS}_{99}&=t_{\rm read}\,\frac{\ln0.01}{\ln(1-p)}.
 \end{align}
-\src{main_simulation.py}{548}{563}{time per read and TTS$_{99}$}
+\src{main_simulation.py}{\rTtsA}{\rTtsB}{time per read and TTS$_{99}$}
 \code{compare_backends} ranks the back-ends of the same device for each (class, $N$): higher median $p_{\rm success}$ wins, ties go to the lower residual.
 The output is \code{summary/backend_comparison.csv} and \code{.png}.
 

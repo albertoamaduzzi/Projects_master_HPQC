@@ -137,3 +137,31 @@ def test_ground_states_report(tmp_path):
         assert P.reward(S) == pytest.approx(ExactEnumeration().solve(P).reward)
         assert r["energy"] == pytest.approx(P.energy(S)) and r["classical:hamming"] == 0
     assert (out / "summary" / "ground_states.csv").exists()
+
+
+def test_records_are_complete_and_validate(tmp_path, monkeypatch):
+    """Everything needed to reconstruct a QPU call a posteriori is saved, and validate re-derives it."""
+    import dwave.system
+    from dwave.system.testing import MockDWaveSampler
+    monkeypatch.setattr(dwave.system, "DWaveSampler",
+                        lambda solver=None, **kw: MockDWaveSampler(topology_type="zephyr", topology_shape=[3, 4]))
+    runs = []
+    for pf in ("0.5", "1.414"):
+        out = tmp_path / f"p{pf}"
+        ms.main(["init", "--out", str(out), "--Ns", "8,12", "--n-instances", "1", "--regimes", "sg_satisficing",
+                 "--num-reads", "50", "--backends", "qpu:zephyr:clique", "--chain-strength-prefactor", pf])
+        ms.main(["qpu", "--out", str(out), "--budget-seconds", "1"])
+        runs.append(out)
+    r = json.loads(next((runs[0] / "anneal" / "qpu_zephyr_clique").rglob("N0012_i0.json")).read_text())
+    info = r["info"]
+    for k in ("problem_id", "embedding_used", "solver_properties", "programmed", "chain_strength", "chain_lengths"):
+        assert k in info, k
+    assert info["sample_kwargs"]["label"].startswith("skgame")
+    assert len(r["reads"]["S"]) == len(r["reads"]["reward"]) and len(r["reads"]["S"][0]) == 12
+    prog = info["programmed"]                          # range [-1, 1]: divide by the largest |J|, chain or logical
+    assert prog["auto_scale_divisor"] == pytest.approx(prog["max_abs_J_before_scaling"])
+    assert prog["auto_scale_divisor"] >= info["chain_strength"] - 1e-12
+    tally = ms.validate(runs[0], ms.load_config(runs[0]), log=lambda *a: None)
+    assert tally and all(bad == 0 for ok, bad in tally.values())
+    rows = ms.scan_summary(runs, log=lambda *a: None)
+    assert {row["prefactor"] for row in rows} == {0.5, 1.414} and (tmp_path / "scan_summary.csv").exists()

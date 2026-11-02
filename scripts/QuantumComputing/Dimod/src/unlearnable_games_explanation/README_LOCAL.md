@@ -107,6 +107,22 @@ python main_simulation.py chains --out $F      # summary\chain_breaks.csv + chai
 python main_simulation.py ground --out $F      # summary\ground_states.csv (also done by analyze)
 ```
 
+**Choosing the chain strength (scan).** There is no formula for the best chain-strength prefactor p: it can only be found by trying a few values on the same instances. Each value is its own small campaign (same instances, only p differs); `scan-summary` compares them. Example at N = 64, 2 instances, both QPUs, 1000 reads: 4 × 2 × 2 = 16 calls ≈ 16 × 0.24 s ≈ 4 s of QPU time:
+```powershell
+foreach ($p in "0.75", "1.0", "1.414", "2.0") {
+    $D = "results\scan\p$p"
+    python main_simulation.py init --preset smoke --out $D --Ns 64 --n-instances 2 --regimes sg_satisficing --num-reads 1000 --chain-strength-prefactor $p
+    python main_simulation.py qpu --out $D --budget-seconds 3
+}
+python main_simulation.py scan-summary --dirs results\scan\p0.75 results\scan\p1.0 results\scan\p1.414 results\scan\p2.0
+```
+It prints, for each p and QPU: success rate (raw and polished, against the best configuration seen in any run), mean broken chains per read, and the share of reads with no broken chain. It also writes `results\scan\scan_summary.csv`.
+
+**Reconstruct and validate everything a posteriori.** Each call saves the D-Wave problem id and label, the solver ranges and a fingerprint of the chip graph, the embedding used, the chain strength, the exact physical problem (`*_physical.npz`) and every configuration read. Every field is described in [RESULTS_FORMAT.md](RESULTS_FORMAT.md). To recompute and check everything from the saved inputs (no QPU):
+```powershell
+python main_simulation.py validate --out $F
+```
+
 **If a QPU's working graph has changed** since the embeddings were cached (`DisconnectedChainError`), the code now re-checks every cached embedding against today's graph and recomputes it when needed; no QPU time is used before that check.
 
 ## 5. Look at the results

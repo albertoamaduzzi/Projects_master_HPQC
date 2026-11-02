@@ -151,7 +151,7 @@ class AnnealBackend:
             return {"num_reads": s.num_reads, "annealing_time": s.annealing_time}
         return {"num_reads": s.sim_num_reads, "num_sweeps": s.sim_num_sweeps}
 
-    def sample(self, P: PlannerProblem, rng=None) -> dict:
+    def sample(self, P: PlannerProblem, rng=None, label: str | None = None) -> dict:
         """One call. For embedded back-ends this does explicitly what FixedEmbeddingComposite does
         (embed -> sample -> unembed), so that the PHYSICAL reads are available in between: from
         them `broken_chains` tells, read by read, which logical spins had a broken chain."""
@@ -161,7 +161,9 @@ class AnnealBackend:
         params = getattr(self.child, "parameters", {}) or {}
         if self.device == "sim" and "seed" in params:
             kw["seed"] = int(rng.integers(2**31))
-        broken, phys_counts, cs_used, emb = None, None, None, None
+        if label and "label" in params:                    # shown in the Leap dashboard next to the problem id
+            kw["label"] = label[:256]
+        broken, phys_counts, cs_used, emb, target = None, None, None, None, None
         t0 = time.perf_counter()
         if self.embedded:
             import dimod
@@ -191,12 +193,46 @@ class AnnealBackend:
         info = out["info"]
         info.update(backend=self.spec, solver=self.solver_id(), settings=asdict(self.settings),
                     sample_kwargs={k: v for k, v in kw.items() if k != "seed"})
+        for k in ("problem_id", "problem_label"):
+            if k in ss.info:
+                info[k] = str(ss.info[k])
+        info["solver_properties"] = self.solver_snapshot()
         if emb is not None:
             info["embedding"] = chain_stats(emb)
+            info["embedding_used"] = {str(i): [int(q) for q in emb[i]] for i in range(P.N)}
             info["chain_lengths"] = [len(emb[i]) for i in range(P.N)]
             info["chain_strength"] = float(cs_used) if np.isscalar(cs_used) else None
             info["max_abs_logical_coupling"] = float(np.max(np.abs(P.W)))
+            q = np.array(list(target.quadratic.values()), float)
+            lo, hi = (info["solver_properties"].get("j_range") or [-1.0, 1.0])
+            # what auto_scale does here (no linear terms): divide all couplers by the factor that
+            # brings the most extreme one to the end of the allowed range [lo, hi]
+            worst = max(q.max(initial=0.0) / hi, q.min(initial=0.0) / lo)
+            uv = np.array(list(target.quadratic.keys()), dtype=np.int64)
+            out["_physical"] = {"u": uv[:, 0], "v": uv[:, 1], "J": q,
+                                "h_q": np.array(list(target.linear.keys()), dtype=np.int64),
+                                "h": np.array(list(target.linear.values()), float), "offset": float(target.offset)}
+            info["programmed"] = {"max_abs_J_before_scaling": float(np.abs(q).max()),
+                                  "auto_scale_divisor": float(worst),
+                                  "n_qubits": int(target.num_variables), "n_couplers": int(target.num_interactions)}
         return out
+
+    def solver_snapshot(self) -> dict:
+        """What the QPU looked like at the time of the call: identity, ranges, working-graph size and
+        a fingerprint of its edge set (changes when qubits/couplers go offline or come back)."""
+        if getattr(self, "_snapshot", None) is not None:
+            return self._snapshot
+        import hashlib
+        props = getattr(self.child, "properties", {}) or {}
+        snap = {k: props[k] for k in ("chip_id", "topology", "h_range", "j_range", "extended_j_range",
+                                      "per_qubit_coupling_range", "annealing_time_range") if k in props}
+        if self.embedded and self.target is not None:
+            edges = sorted(tuple(sorted(map(int, e))) for e in self.target.edges())
+            snap["working_qubits"] = self.target.number_of_nodes()
+            snap["working_couplers"] = len(edges)
+            snap["graph_sha1"] = hashlib.sha1(repr(edges).encode()).hexdigest()[:16]
+        self._snapshot = snap
+        return snap
 
     def estimate_access_time(self, N: int) -> float | None:
         """Seconds of QPU access time for one call, from the solver's timing model (no QPU use)."""
@@ -290,7 +326,8 @@ def sampleset_statistics(ss, P: PlannerProblem, wall: float, polish: bool = Fals
         keys = list(table)
         Sk = np.array([np.frombuffer(k[0]) for k in keys]).reshape(len(keys), P.N)
         rk = np.atleast_1d(P.reward(Sk)) if keys else np.zeros(0)
-        out["reads"] = {"reward": rk.tolist(), "n_broken": [k[1] for k in keys], "count": [table[k] for k in keys],
+        out["reads"] = {"S": [_spin_string(x) for x in Sk], "reward": rk.tolist(), "n_broken": [k[1] for k in keys],
+                        "count": [table[k] for k in keys],
                         "polished_reward": [polish_of[k[0]] for k in keys] if polish_of is not None else None}
     return out
 
