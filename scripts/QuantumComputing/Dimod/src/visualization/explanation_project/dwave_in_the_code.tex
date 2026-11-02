@@ -41,7 +41,9 @@ This document explains, file by file and line by line, how the SK-game campaign 
 \item the six ways (``modes'') of running an annealer in this project;
 \item what \code{qpu --check} actually does, and how the QPU time is estimated (three levels, with the formulas);
 \item how the budget guard (\code{--budget-seconds}) makes sure a run never exceeds a given QPU time;
-\item how the results are turned into success probabilities, time-to-solution and the Zephyr/Pegasus comparison.
+\item how the results are turned into success probabilities, time-to-solution and the Zephyr/Pegasus comparison;
+\item the package \code{dwave_utils}: the linear pipeline (budget, calibrate, run, report, compare), the
+  feasibility model, and the fit of the machine's control error $\sigma$ and effective temperature $\beta_{\rm eff}$.
 \end{itemize}
 The code excerpts are read directly from the source files when the document is compiled, so the line numbers
 are those of the version in the repository. Section~\ref{sec:plan} gives the exact commands for a test
@@ -64,6 +66,11 @@ file & role \\ \midrule
 \code{skgame/optim/backends.py} & \code{AnnealBackend}: one object per \code{device:topology:strategy}; builds the sampler, embeds, samples, collects statistics, estimates time \\
 \code{skgame/optim/quantum.py} & \code{QuantumAnnealingSolver}: the older single-solver path (\code{DWaveCliqueSampler}/\code{EmbeddingComposite}), used by the planner benchmark \\
 \code{skgame/optim/solvers.py} & \code{DimodSamplerSolver} (generic dimod wrapper) and the classical dimod samplers \\
+\code{dwave_utils/pipeline.py} & the QPU pipeline: \code{budget}, \code{calibrate}, \code{run}, \code{report}, \code{compare} (Sec.~\ref{sec:pipeline}) \\
+\code{dwave_utils/coupling_scan.py} & the chain-strength scan and choice used by \code{calibrate} \\
+\code{dwave_utils/feasibility.py} & yes / marginal / no: can the QPU represent a problem faithfully? \\
+\code{dwave_utils/noise_fit.py} & $\sigma$ and $\beta_{\rm eff}$ measured from the QPU's own small-$N$ reads \\
+\code{dwave_utils/shimming.py} & flux-bias shimming \\
 \code{main_simulation.py} & the campaign: stages \code{init}, \code{instances}, \code{classical}, \code{embed}, \code{qpu}/\code{sim}, \code{analyze}; the QPU budget guard; the analysis \\
 \code{tests/test_embedding.py}, \code{tests/test_campaign.py} & tests of all the above, including the QPU path against D-Wave's mock QPU \\
 \bottomrule
@@ -393,6 +400,81 @@ For every QPU and every $N$ of a (reduced) grid, the same instance is annealed w
 \paragraph{Cost.} The scan costs $\approx5.4$ s of QPU time for $N=8,\dots,48$ and 104 on both QPUs. That is about 15.8 ms of programming plus 200 reads per call, for 98 calls. The time does not depend on $p$.
 
 %=====================================================================================
+\section{The QPU pipeline: \texorpdfstring{\code{dwave_utils}}{dwave\_utils}}\label{sec:pipeline}
+%=====================================================================================
+All the D-Wave tools are in the package \code{dwave_utils}. Each command can be launched as
+\code{python -m dwave_utils <command>} or \code{python main_simulation.py <command>}, and each one is also a Python
+function (\code{import dwave_utils as du}). The pipeline is linear:
+\begin{center}
+\code{feasibility} $\to$ \code{init} $\to$ \code{budget} $\to$ \code{calibrate} $\to$ \code{budget --fill} $\to$
+\code{run} $\to$ \code{report} $\to$ (\code{classical}) $\to$ \code{compare} $\to$ \code{noise-fit}
+\end{center}
+
+\subsection{Calibration: one $p_{\rm opt}$ per (machine, $N$), shared by every problem class}
+The embedding, i.e.\ the chains, depends only on the topology and on $N$. So the chain-strength prefactor is
+measured once per (machine, $N$), on one problem class (the pure SK one by default), and every class uses it.
+For each pair the grid $0.75, 1, 1.414, 2, 3, 4, 6$ is climbed from the smallest $p$, with 200 reads on instance 0.
+It stops at the first $p$ with no broken chain in any read: that $p$ is $p_{\rm opt}$.
+\src{dwave_utils/pipeline.py}{\rCalibA}{\rCalibB}{one calibration per (machine, $N$)}
+\code{run} refuses to start while some (machine, $N$) has no $p_{\rm opt}$:
+\src{dwave_utils/pipeline.py}{\rMissingA}{\rMissingB}{what is still uncalibrated}
+\src{dwave_utils/coupling_scan.py}{\rPreforA}{\rPreforB}{the $p$ used by every QPU call}
+The cost is about 33 (machine, $N$) pairs $\times$ 5 values of $p$ $\times$ 55.8 ms $\approx$ 9 s.
+
+\subsection{Spending the whole budget: \texorpdfstring{\code{budget --fill}}{budget --fill} and \texorpdfstring{\code{run --total}}{run --total}}
+\code{--total} is the QPU time available when the campaign started. What the campaign has already spent is read
+from its own results: the main runs, the calibration and the shimming. The cost of a call is linear in the reads,
+$t(R)=a+bR$, with $a$ and $b$ taken from the solver's timing model. \code{--fill} picks the largest $R$ that fits:
+\[
+R=\left\lfloor\frac{T_{\rm total}-T_{\rm spent}-T_{\rm calibration\ left}-T_{\rm margin}-\sum_{\rm calls}a}{\sum_{\rm calls}b}\right\rfloor,
+\]
+capped so that a single call stays below the QPU's 1 s limit. \code{run --total} caps the run at
+$T_{\rm total}-T_{\rm spent}$. It goes N by N, both machines at each $N$, so a stop leaves complete sizes behind.
+
+\subsection{Report and compare}
+\code{report} writes one row per (machine, class, $N$, instance): the $p$ used, the best configuration and its energy
+and reward, and the reference (exact for $N\le24$). \code{compare} puts the QPU, the classical solvers and the game
+side by side, with classes from easy to hard. Its metrics are:
+\begin{itemize}
+\item the residual $\rho=(R_{\rm ref}-R)/|R_{\rm ref}|$ of the best sample and of the typical sample;
+\item the exact success $P(\rho=0)$, meaningful only where the optimum is certified;
+\item the \emph{satisficing} success $P(\rho\le\delta)$, the main metric at large $N$;
+\item the time to target ${\rm TTT}_{99}(\delta)=t\,\ln0.01/\ln(1-P)$.
+\end{itemize}
+Above $N=24$ the reference is the best known one, and its plausibility is checked against the Parisi curve
+$R(N)\approx-2(-0.7633+0.7N^{-2/3})$.
+
+\subsection{Feasibility: can the QPU represent the problem at all?}
+All quantities are in field units $u=J_{\rm rms}\sqrt{N-1}$.
+\begin{itemize}
+\item \textbf{Chains must hold:} $p_{\rm low}=\max_i|h_i(S^*)|/u$, the largest field at a low-energy state.
+\item \textbf{Divisor:} $D=\max(c/r,\max|W|)$, with $c=p_{\rm low}u$ and $r=2$ with the extended range, otherwise 1.
+\item \textbf{Relative control error:} $\varepsilon=\sigma\sqrt{|E|}\,D/J_{\rm rms}$.
+\item \textbf{Temperature over the critical one:} $T_u/T_c=D/(\beta_{\rm eff}uT_c)$.
+\end{itemize}
+The verdict is YES if $\varepsilon\le0.3$ and $T_u/T_c\le0.3$, and NO if either is $\ge1$ or if $N$ cannot be embedded.
+\src{dwave_utils/feasibility.py}{\rAssessA}{\rAssessB}{the verdict}
+
+\subsection{Measuring \texorpdfstring{$\sigma$}{sigma} and \texorpdfstring{$\beta_{\rm eff}$}{beta\_eff}: \texorpdfstring{\code{noise-fit}}{noise-fit}}
+The model of one call: the chip holds $W/D+\delta$, with $\delta_{ij}\sim\mathcal N(0,\sigma^2|E_{ij}|)$ fixed for
+the whole call, and every read is Boltzmann distributed at $\beta_{\rm eff}$:
+\[
+P(S\mid\delta)=\frac{e^{-\beta_{\rm eff}E_\delta(S)}}{Z_\delta},\qquad
+L(\beta,\sigma)=\mathbb E_\delta\Big[\prod_{\rm reads}P(S_r\mid\delta)\Big].
+\]
+For $N\le12$ all $2^{N-1}$ states are enumerated, so $Z$ is exact. The integral over $\delta$ uses the Laplace
+approximation around the most likely $\delta$, found by Newton's method. The log-likelihoods of all calls of a
+machine are summed on a grid, which is then refined; the 95\,\% interval is $\Delta\log L=1.92$.
+\src{dwave_utils/noise_fit.py}{\rLoglikA}{\rLoglikB}{likelihood of one call}
+On synthetic data with known values, 30 calls of 1000 reads, the fit recovers them:
+$(\beta,\sigma)=(8,0.03)\to(7.8,0.031)$; $(3,0.01)\to(2.96,0.011)$; $(15,0)\to(15.1,0.0004)$.
+\code{feasibility --from-fit DIR} then uses the measured values instead of the assumed ones.
+\begin{lstlisting}
+python -m dwave_utils noise-fit   --out results\sk                      # sigma, beta_eff per machine
+python -m dwave_utils feasibility --topology zephyr --N 16 64 104 --from-fit results\sk
+\end{lstlisting}
+
+%=====================================================================================
 \section{Reproducibility: everything needed to reconstruct a call}
 %=====================================================================================
 Each call saves:
@@ -485,27 +567,19 @@ What to check in the output:
 \end{enumerate}
 
 \subsection{Spending the 180 s before 4 November}
-Your check gives 157.3 s for the full campaign on both topologies at 1000 reads. That leaves about 22 s of margin,
-\emph{if} the real charges match the model, which the test will show. Two safe options:
-\begin{table}[H]\centering\small
-\begin{tabularx}{\linewidth}{L{4.2cm}L{2.0cm}X}
-\toprule
-plan & QPU time & comment \\ \midrule
-\code{full}, 1000 reads, both QPUs & $\approx157$ s & as designed; run with \code{--budget-seconds 170} so it can never pass 170 s \\
-\code{full}, 500 reads (\code{init ... --num-reads 500}) & $\approx80$ s & time $\propto$ reads; leaves $\approx90$ s for a chain-strength scan at the $N$ where success drops \\
-\bottomrule
-\end{tabularx}
-\end{table}
+The plan uses the pipeline of Sec.~\ref{sec:pipeline}. Calibration takes about 9 s, and \code{--fill} gives
+everything that is left to the main run:
 \begin{lstlisting}
-$F = "results\full"
-python main_simulation.py init --preset full --out $F --force          # (add --num-reads 500 for option 2)
-python main_simulation.py qpu --out $F --check
-python main_simulation.py qpu --out $F --budget-seconds 170            # stops by itself before 170 s
-python main_simulation.py qpu --out $F --spent
+$F = "results\sk"
+python main_simulation.py init --preset full --out $F --Ns 8:160:8 --n-instances 5
+python -m dwave_utils budget    --out $F --total 178
+python -m dwave_utils calibrate --out $F --budget-seconds 15
+python -m dwave_utils budget    --out $F --total 178 --fill
+python -m dwave_utils run       --out $F --total 178
+python -m dwave_utils report    --out $F
+python -m dwave_utils noise-fit --out $F                                # no QPU
 \end{lstlisting}
-The QPU stage does not need the classical stage. That can run before or after, on the laptop or on Leonardo,
-and \code{analyze} combines them. If the run stops on the budget, it has saved everything done so far, and
-\code{--spent} shows the total.
+The classical stage and \code{compare} need no QPU time and can run afterwards, on the laptop or on Leonardo.
 
 %=====================================================================================
 \section*{References}

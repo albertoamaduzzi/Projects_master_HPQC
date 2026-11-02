@@ -1276,6 +1276,11 @@ def main(argv=None) -> None:
     p.add_argument("--t-ok", type=float, default=0.3)
     p.add_argument("--instances", type=int, default=8)
     p.add_argument("--plot", help="write a figure here")
+    p.add_argument("--from-fit", help="campaign directory with calibration/noise_fit.json: use its sigma and beta_eff")
+    p = sub.add_parser("noise-fit", parents=[common],
+                       help="measure sigma and beta_eff from the QPU reads of small N (no QPU)")
+    p.add_argument("--max-N", type=int, default=12, help="largest N used (all 2^(N-1) states enumerated)")
+    p.add_argument("--include-broken", action="store_true", help="also use reads with broken chains")
     p = sub.add_parser("scan-summary", help="compare campaigns differing only in annealing settings (no QPU)")
     p.add_argument("--dirs", nargs="+", required=True, type=Path)
     sub.add_parser("validate", parents=[common],
@@ -1288,7 +1293,16 @@ def main(argv=None) -> None:
 
     if a.cmd == "feasibility":
         from dwave_utils import feasibility
-        feasibility.run(a.topology, sorted({n for g in a.N for n in g}), eps=a.eps, J0=a.J0, sigma=a.sigma, beta=a.beta,
+        sigma, beta = a.sigma, a.beta
+        if a.from_fit:
+            from dwave_utils.noise_fit import load_fit
+            m = load_fit(Path(a.from_fit), a.topology)
+            if m is None:
+                sys.exit(f"no noise fit for {a.topology} in {a.from_fit} (run noise-fit first)")
+            sigma, beta = m["sigma"], m["beta_eff"]
+            print(f"[feasibility] measured on {a.topology}: sigma={sigma:.4f} {m['sigma_95']}, "
+                  f"beta_eff={beta:.2f} {m['beta_95']} ({m['calls']} calls)")
+        feasibility.run(a.topology, sorted({n for g in a.N for n in g}), eps=a.eps, J0=a.J0, sigma=sigma, beta=beta,
                         extended=a.extended_j_range, eps_ok=a.eps_ok, t_ok=a.t_ok, n=a.instances,
                         J_file=a.J_file, plot=a.plot)
         return
@@ -1349,6 +1363,9 @@ def main(argv=None) -> None:
         ground_states(out, cfg)
     elif a.cmd == "validate":
         validate(out, cfg)
+    elif a.cmd == "noise-fit":
+        from dwave_utils import noise_fit
+        noise_fit.fit(out, cfg, max_N=a.max_N, include_broken=a.include_broken)
     elif a.cmd in ("budget", "calibrate", "run", "report", "compare"):
         from dwave_utils import pipeline
         if a.cmd == "compare":

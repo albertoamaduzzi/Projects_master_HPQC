@@ -389,3 +389,52 @@ def test_dwave_utils_python_sequence_keeps_config(tmp_path, monkeypatch):
     assert disk.flux_biases_files and disk.chain_strength_by_N and disk.num_reads == cfg.num_reads
     du.run(out, cfg, budget_s=du.left(out, total), log=lambda *a: None)
     assert du.report(out, cfg, log=lambda *a: None)
+
+
+def test_noise_fit_recovers_synthetic_parameters():
+    """Boltzmann reads of instances with known coupler errors: the fit finds beta_eff and sigma."""
+    from dwave_utils.noise_fit import BETAS, SIGMAS, _grid_sum, _pair_energy, _refine, all_states
+    from skgame.optim.problem import PlannerProblem
+    from skgame.model import InteractionEnsemble
+    N, beta_true, sig_true = 7, 6.0, 0.03
+    rng = np.random.default_rng(3)
+    data = []
+    for _ in range(20):
+        W = PlannerProblem(InteractionEnsemble(N).sample(rng, 1)[0]).W
+        D = rng.choice([1.0, 2.0, 3.0]) * np.sqrt((W ** 2).sum() / (N * (N - 1))) * np.sqrt(N - 1)
+        st, iu = all_states(N), np.triu_indices(N, 1)
+        d = np.zeros((N, N))
+        d[iu] = sig_true * rng.standard_normal(len(iu[0]))
+        E = _pair_energy(st, W / D + d + d.T)
+        P = np.exp(-beta_true * (E - E.min()))
+        c = rng.multinomial(1000, P / P.sum())
+        k = np.flatnonzero(c)
+        data.append(("m", (W, D, np.ones((N, N)), st[k] * rng.choice([-1, 1], (len(k), 1)), c[k])))
+    ll = _grid_sum(data, BETAS, SIGMAS)["m"]
+    jb, js = np.unravel_index(np.argmax(ll), ll.shape)
+    fb, fs = _refine(BETAS, SIGMAS, jb, js)
+    f = _grid_sum(data, fb, fs)["m"]
+    kb, ks = np.unravel_index(np.argmax(f), f.shape)
+    assert fb[kb] == pytest.approx(beta_true, rel=0.1)
+    assert fs[ks] == pytest.approx(sig_true, rel=0.2)
+
+
+def test_noise_fit_on_mock_campaign_and_feasibility_from_fit(tmp_path, monkeypatch, capsys):
+    import dwave.system
+    from dwave.system.testing import MockDWaveSampler
+    monkeypatch.setattr(dwave.system, "DWaveSampler",
+                        lambda solver=None, **kw: MockDWaveSampler(topology_type="zephyr", topology_shape=[3, 4]))
+    out = tmp_path / "nf"
+    ms.main(["init", "--out", str(out), "--Ns", "8", "--n-instances", "2", "--regimes", "sg_satisficing",
+             "--num-reads", "200", "--backends", "qpu:zephyr:clique"])
+    ms.main(["calibrate", "--out", str(out)])
+    ms.main(["run", "--out", str(out)])
+    ms.main(["noise-fit", "--out", str(out), "--max-N", "8"])
+    res = json.loads((out / "calibration" / "noise_fit.json").read_text())
+    m = res["machines"]["qpu_zephyr_clique"]
+    assert m["calls"] >= 3 and m["beta_eff"] > 0 and m["sigma"] >= 0
+    assert (out / "calibration" / "noise_fit.png").exists()
+    capsys.readouterr()
+    ms.main(["feasibility", "--topology", "zephyr", "--N", "16", "--instances", "2", "--from-fit", str(out)])
+    printed = capsys.readouterr().out
+    assert "measured on zephyr" in printed and "verdict" in printed

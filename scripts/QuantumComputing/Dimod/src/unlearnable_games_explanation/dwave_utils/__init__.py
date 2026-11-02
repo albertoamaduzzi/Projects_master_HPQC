@@ -6,6 +6,7 @@ Modules
     coupling_scan  chain-strength prefactor scan and choice (used by calibrate)
     feasibility    yes / marginal / no: can a quantum annealer represent a problem? (no QPU)
     shimming       flux-bias shimming of a QPU on the SK problem
+    noise_fit      measure sigma (control error) and beta_eff from the QPU's own small-N reads
 
 Python (from the folder unlearnable_games_explanation, e.g. in the notebook):
 
@@ -19,6 +20,9 @@ Python (from the folder unlearnable_games_explanation, e.g. in the notebook):
     rows = du.report(out, cfg)
     rows = du.compare(out, cfg)
     du.shim(out, cfg, "qpu:zephyr:clique", N=104, iterations=30)
+    du.fit_noise(out, cfg)                                    # sigma, beta_eff per machine (no QPU)
+    m = du.load_fit(out, "zephyr")
+    du.check_feasibility("zephyr", [16, 64, 104], sigma=m["sigma"], beta=m["beta_eff"])
 
 Command line (same arguments as the main_simulation.py subcommands):
 
@@ -35,11 +39,13 @@ from .feasibility import assess, embedding_stats, field_bound
 from .feasibility import run as check_feasibility
 from .pipeline import (GRID, budget, calibrate, calibration_class, compare, missing_calibration, report, run,
                        spent_in_campaign)
+from .noise_fit import fit as fit_noise
+from .noise_fit import load_fit
 from .shimming import load_fbos, run_shimming
 
 shim = run_shimming
 
-COMMANDS = ("feasibility", "budget", "calibrate", "run", "report", "compare", "shim", "coupling-scan")
+COMMANDS = ("feasibility", "noise-fit", "budget", "calibrate", "run", "report", "compare", "shim", "coupling-scan")
 
 
 def open_campaign(out) -> tuple:
@@ -56,6 +62,6 @@ def left(out, total: float) -> float:
 
 __all__ = ["COMMANDS", "DEFAULT_PREFACTORS", "GRID", "assess", "budget", "calibrate", "calibration_class",
            "choose_coupling", "compare", "coupling_for", "check_feasibility", "embedding_stats", "field_bound",
-           "find_best_coupling_per_problem", "left", "load_fbos", "missing_calibration", "open_campaign",
+           "find_best_coupling_per_problem", "fit_noise", "left", "load_fit", "load_fbos", "missing_calibration", "open_campaign",
            "prefactor_for", "report", "run", "run_shimming", "shim", "spent_in_campaign",
            "summarize_coupling_scan"]
