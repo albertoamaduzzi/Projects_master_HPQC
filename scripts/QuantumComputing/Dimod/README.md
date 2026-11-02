@@ -2,6 +2,7 @@
 
 | | |
 |---|---|
+| [`src/unlearnable_games_explanation/PIPELINE.md`](src/unlearnable_games_explanation/PIPELINE.md) | **running on the QPU**: the four commands in order (budget, calibrate p_opt per N and machine, run, report) and what each output contains |
 | [`explanation_project.pdf`](explanation_project.pdf) | **start here**: the whole project explained, with all the figures (source: `src/visualization/explanation_project/explanation_project.tex`, rebuild with `bash src/visualization/explanation_project/build.sh`) |
 | [`dwave_in_the_code.pdf`](dwave_in_the_code.pdf) | how the code uses D-Wave: Ocean functions and their capabilities, modes of use, `qpu --check`, time estimates, the `--budget-seconds` guard, the 1-second test (source: `src/visualization/explanation_project/dwave_in_the_code.tex`) |
 | [`prefactor_and_shimming.pdf`](prefactor_and_shimming.pdf) | the chain-strength prefactor derived step by step (lower bound: chains hold; upper bound: control error), the extended coupler range, flux-bias shimming of the QPU and what it says about the machine (source: `src/visualization/explanation_project/prefactor_and_shimming.tex`) |

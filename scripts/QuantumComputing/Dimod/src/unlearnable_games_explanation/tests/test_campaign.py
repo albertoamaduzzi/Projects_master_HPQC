@@ -234,3 +234,36 @@ def test_extended_j_range_and_shimming_on_mock(tmp_path, monkeypatch):
     assert c / 2 - 1e-9 <= sc["divisor"] <= max(c / 2, wmax) + 1e-9
     tally = ms.validate(out, cfg, log=lambda *a: None)
     assert all(bad == 0 for ok, bad in tally.values())
+
+
+def test_linear_pipeline_on_mock(tmp_path, monkeypatch):
+    """budget -> calibrate (every N, adaptive) -> run (exact p_opt per N, machine) -> report."""
+    import csv as _csv
+    import dwave.system
+    from dwave.system.testing import MockDWaveSampler
+    monkeypatch.setattr(dwave.system, "DWaveSampler",
+                        lambda solver=None, **kw: MockDWaveSampler(topology_type="zephyr", topology_shape=[3, 4]))
+    out = tmp_path / "p"
+    ms.main(["init", "--out", str(out), "--Ns", "8,12", "--n-instances", "1", "--regimes", "sg_satisficing",
+             "--num-reads", "30", "--backends", "qpu:zephyr:clique"])
+    ms.main(["budget", "--out", str(out)])
+    with pytest.raises(SystemExit):                      # no calibration yet: run refuses
+        ms.main(["run", "--out", str(out)])
+    ms.main(["calibrate", "--out", str(out), "--budget-seconds", "20"])
+    cfg = ms.load_config(out)
+    t = cfg.chain_strength_by_N["qpu_zephyr_clique"]
+    assert set(t) == {"8", "12"}
+    rows = list(_csv.DictReader(open(out / "calibration" / "p_opt.csv")))
+    assert {int(r["N"]) for r in rows} == {8, 12}
+    # adaptive: no p above the chosen one was tested
+    for N, p in t.items():
+        tested = [float(f.name.split("_p")[1].split("_i")[0])
+                  for f in (out / "coupling_scan" / "qpu_zephyr_clique").rglob(f"N{int(N):04d}_p*_i0.json")]
+        assert max(tested) == p
+    ms.main(["run", "--out", str(out), "--budget-seconds", "5"])
+    res = list(_csv.DictReader(open(out / "results" / "sk_qpu_results.csv")))
+    assert len(res) == 2
+    for r in res:
+        assert float(r["p_used"]) == float(t[r["N"]])
+        assert r["reference_source"] == "exact" and r["reached_reference"] in ("True", "False")
+        assert len(r["best_configuration"]) == int(r["N"])
