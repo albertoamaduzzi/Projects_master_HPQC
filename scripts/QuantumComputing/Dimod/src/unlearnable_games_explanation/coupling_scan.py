@@ -60,6 +60,15 @@ def coupling_for(table: dict, label: str, N: int, default: float) -> float:
     return float(np.interp(N, xs, ys))
 
 
+def prefactor_for(cfg, label: str, key: str, N: int) -> float:
+    """p for (back-end, problem class, N): the per-class calibration if there is one for this class and
+    back-end, else the per-back-end table (chain_strength_by_N), else the campaign default."""
+    by_class = (getattr(cfg, "chain_strength_by_class", None) or {}).get(key) or {}
+    if by_class.get(label):
+        return coupling_for(by_class, label, N, cfg.chain_strength_prefactor)
+    return coupling_for(cfg.chain_strength_by_N or {}, label, N, cfg.chain_strength_prefactor)
+
+
 def find_best_coupling_per_problem(out: Path, cfg, Ns, prefactors=DEFAULT_PREFACTORS, specs=None, keys=None,
                                    n_instances: int = 1, num_reads: int = 200, threshold: float = 0.0,
                                    budget=None, check_only: bool = False, apply: bool = True, adaptive: bool = False,
@@ -101,9 +110,9 @@ def find_best_coupling_per_problem(out: Path, cfg, Ns, prefactors=DEFAULT_PREFAC
         log(f"[coupling] estimated QPU access time: {total:.2f} s (spends nothing)")
         return {}
     todo.sort(key=lambda t: (t[2], specs.index(t[0].spec), t[1], t[3], t[4]))   # N, back-end, p ascending
-    reached = {(lab, N) for lab, t in _saved_ok(out, threshold).items() for N in t} if adaptive else set()
+    reached = set(_saved_ok(out, threshold)) if adaptive else set()
     for n, (be, key, N, p, b) in enumerate(todo):
-        if (be.label, N) in reached:
+        if (be.label, key, N) in reached:
             continue
         est = ms._call_estimate(be, N, cfg)
         if not budget.allows(est):
@@ -128,25 +137,25 @@ def find_best_coupling_per_problem(out: Path, cfg, Ns, prefactors=DEFAULT_PREFAC
         budget.charge(acc if acc > 0 else est, est)
         log(f"[coupling] {n + 1:3d}/{len(todo)} {be.label:20s} N={N:4d} p={p:<6g} "
             f"broken/read={_mean_broken(res):6.3f} qpu_access={acc * 1e3:.1f}ms (total {budget.spent:.3f}s)")
-        if adaptive and b == n_instances - 1 and (be.label, N) in {(l, int(k)) for l, t in _saved_ok(out, threshold).items() for k in t}:
-            reached.add((be.label, N))
-            log(f"[coupling]     {be.label} N={N}: threshold reached at p={p:g}; larger p skipped")
+        if adaptive and b == n_instances - 1 and (be.label, key, N) in _saved_ok(out, threshold):
+            reached.add((be.label, key, N))
+            log(f"[coupling]     {be.label} {key} N={N}: threshold reached at p={p:g}; larger p skipped")
     return summarize_coupling_scan(out, cfg, threshold=threshold, apply=apply, log=log)
 
 
 def _saved_ok(out: Path, threshold: float) -> dict:
-    """{label: {N: [p...]}} of the saved scan points (all instances together) meeting the threshold."""
+    """{(label, key, N): [p...]} of the saved scan points (all instances together) meeting the threshold."""
     acc = {}
     for f in (out / "coupling_scan").glob("*/*/N*_p*_i*.json") if (out / "coupling_scan").exists() else []:
         r = json.loads(f.read_text())
         h = r["info"].get("broken_chains_hist") or {}
-        a = acc.setdefault((f.parent.parent.name, r["N"], r["prefactor"]), [0, 0])
+        a = acc.setdefault((f.parent.parent.name, r["key"], r["N"], r["prefactor"]), [0, 0])
         a[0] += sum(h.values())
         a[1] += sum(int(k) * v for k, v in h.items())
     ok = {}
-    for (lab, N, p), (reads, broken) in acc.items():
+    for (lab, key, N, p), (reads, broken) in acc.items():
         if reads and broken / reads / N <= threshold + 1e-15:
-            ok.setdefault(lab, {}).setdefault(N, []).append(p)
+            ok.setdefault((lab, key, N), []).append(p)
     return ok
 
 
@@ -162,7 +171,7 @@ def summarize_coupling_scan(out: Path, cfg, threshold: float = 0.0, apply: bool 
     acc = {}
     for f in sorted(root.glob("*/*/N*_p*_i*.json")) if root.exists() else []:
         r = json.loads(f.read_text())
-        a = acc.setdefault((f.parent.parent.name, r["N"], r["prefactor"]),
+        a = acc.setdefault((f.parent.parent.name, r["key"], r["N"], r["prefactor"]),
                            {"reads": 0, "broken": 0, "zero": 0, "best": -np.inf, "chain_strength": [],
                             "c_over_max": [], "prog_rms": []})
         info = r["info"]
@@ -183,8 +192,8 @@ def summarize_coupling_scan(out: Path, cfg, threshold: float = 0.0, apply: bool 
         a["best"] = max(a["best"], r.get("polished_best_reward", r["best_reward"]))
         a["chain_strength"].append(r["info"].get("chain_strength"))
     rows = []
-    for (lab, N, p), a in sorted(acc.items()):
-        rows.append({"backend": lab, "N": N, "p": p, "reads": a["reads"],
+    for (lab, key, N, p), a in sorted(acc.items()):
+        rows.append({"backend": lab, "problem": key, "N": N, "p": p, "reads": a["reads"],
                      "broken_per_read": a["broken"] / max(1, a["reads"]),
                      "broken_fraction": a["broken"] / max(1, a["reads"]) / N,
                      "frac_reads_no_break": a["zero"] / max(1, a["reads"]),
@@ -192,15 +201,17 @@ def summarize_coupling_scan(out: Path, cfg, threshold: float = 0.0, apply: bool 
                      "chain_strength": float(np.mean([c for c in a["chain_strength"] if c is not None] or [np.nan])),
                      "c_over_max_coupling": float(np.mean(a["c_over_max"])) if a["c_over_max"] else None,
                      "programmed_logical_rms": float(np.mean(a["prog_rms"])) if a["prog_rms"] else None})
-    best = {}
-    for lab in dict.fromkeys(r["backend"] for r in rows):
-        for N in sorted({r["N"] for r in rows if r["backend"] == lab}):
-            sel = [r for r in rows if r["backend"] == lab and r["N"] == N]
-            p, why = choose_coupling(sel, threshold)
-            best.setdefault(lab, {})[str(N)] = p
-            for r in sel:
-                r["chosen"] = r["p"] == p
-                r["reason"] = why if r["p"] == p else ""
+    by_class = {}                                   # {problem class: {back-end: {N: p}}}
+    for key, lab, N in dict.fromkeys((r["problem"], r["backend"], r["N"]) for r in rows):
+        sel = [r for r in rows if r["backend"] == lab and r["N"] == N and r["problem"] == key]
+        p, why = choose_coupling(sel, threshold)
+        by_class.setdefault(key, {}).setdefault(lab, {})[str(N)] = p
+        for r in sel:
+            r["chosen"] = r["p"] == p
+            r["reason"] = why if r["p"] == p else ""
+    # per-back-end table (used for classes without their own calibration): the pure SK class if scanned
+    main_key = "eps0_J00" if "eps0_J00" in by_class else next(iter(by_class), None)
+    best = by_class.get(main_key, {})
     if not rows:
         log("[coupling] no scan results yet")
         return {}
@@ -210,24 +221,27 @@ def summarize_coupling_scan(out: Path, cfg, threshold: float = 0.0, apply: bool 
         w.writeheader()
         w.writerows(rows)
     payload = {"rule": f"smallest p with broken-chain fraction <= {threshold:g}, else fewest broken chains",
-               "threshold": threshold, "best": best,
+               "threshold": threshold, "best": best, "by_class": by_class,
                "use": "N between scanned values: linear interpolation; beyond: nearest scanned value"}
     ms._write_json(root / "best_coupling.json", payload)
-    _plot(root, rows, best)
-    for lab, t in best.items():
-        log(f"[coupling] best prefactor for {lab}: " + ", ".join(f"N={k}: p={v:g}" for k, v in t.items()))
-        for r in rows:
-            if r["backend"] == lab and r.get("chosen") and "(" in r["reason"]:
-                log(f"[coupling]   N={r['N']}: {r['reason']}")
+    for key in by_class:
+        sel = [r for r in rows if r["problem"] == key]
+        _plot(root, sel, by_class[key], name="coupling_scan.png" if key == main_key else f"coupling_scan_{key}.png")
+        for lab, t in by_class[key].items():
+            log(f"[coupling] best prefactor for {lab} {key}: " + ", ".join(f"N={k}: p={v:g}" for k, v in t.items()))
+            for r in sel:
+                if r["backend"] == lab and r.get("chosen") and "(" in r["reason"]:
+                    log(f"[coupling]   N={r['N']}: {r['reason']}")
     if apply:
         cfg.chain_strength_by_N = best
+        cfg.chain_strength_by_class = by_class
         ms.save_config(out, cfg)
         log(f"[coupling] stored in {out / 'config.json'} (chain_strength_by_N): `qpu` now uses these values")
     log(f"[coupling] -> {root / 'coupling_scan.csv'}, {root / 'coupling_scan.png'}, {root / 'best_coupling.json'}")
     return best
 
 
-def _plot(root: Path, rows: list[dict], best: dict) -> None:
+def _plot(root: Path, rows: list[dict], best: dict, name: str = "coupling_scan.png") -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -268,5 +282,7 @@ def _plot(root: Path, rows: list[dict], best: dict) -> None:
         axes[2, j].set_ylabel("chosen prefactor p")
         axes[2, j].set_title("used by the main run (interpolated between scanned N)", fontsize=9)
     fig.tight_layout()
-    fig.savefig(root / "coupling_scan.png", dpi=130)
+    if rows and rows[0].get("problem"):
+        fig.suptitle(f"problem class {rows[0]['problem']}", y=1.0)
+    fig.savefig(root / name, dpi=130, bbox_inches="tight")
     plt.close(fig)

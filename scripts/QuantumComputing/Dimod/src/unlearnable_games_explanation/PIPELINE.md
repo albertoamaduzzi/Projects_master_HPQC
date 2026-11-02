@@ -1,11 +1,11 @@
 # The QPU pipeline, step by step
 
 **Input:** a list of N (number of agents) and the machines (Zephyr = Advantage2, Pegasus = Advantage).
-**Output:** for every (machine, N, instance): the best configuration found (ground-state candidate), its energy, its reward R_N, and whether it equals the reference optimum.
+**Output:** for every (machine, problem class, N, instance): the best configuration found (ground-state candidate), its energy, its reward R_N, and whether it equals the reference optimum.
 
 ```
-list of N ──► 0. budget ──► 1. calibrate ──► p_opt(N, machine) ──► 2. run ──► 3. report
-              (no QPU)      (QPU, ~5–13 s)     calibration/p_opt.csv   (QPU)     results/sk_qpu_results.csv
+list of N ──► 0. budget ──► 1. calibrate ──► p_opt(class, N, machine) ──► 1b. budget --fill ──► 2. run ──► 3. report
+              (no QPU)      (QPU, ~37 s)     calibration/p_opt.csv        (no QPU: sets reads)   (QPU, the rest)  results/sk_qpu_results.csv
 ```
 
 Each step is resumable: rerunning a command skips what is already saved. Every QPU command has a hard cap, `--budget-seconds`.
@@ -23,26 +23,31 @@ So p does not multiply the logical couplings. It sets how strong the chains are 
 * p too small: chains break and the read is not a valid assignment of the N agents (it is repaired by majority vote).
 * p too large: the SK couplings become tiny compared with the QPU's analogue noise.
 
-The best p depends on N and on the embedding, so on the machine. Calibration finds **p_opt(N, machine) = the smallest p of the grid 0.75, 1, 1.414, 2, 3, 4, 6 with no broken chain in any of 200 reads**. It climbs the grid from the smallest p and stops as soon as one p meets the rule. The derivation of why p ≈ 3–4 is expected at large N is in [`../../prefactor_and_shimming.pdf`](../../prefactor_and_shimming.pdf).
+The best p depends on N and on the embedding, so on the machine. Calibration finds, for every problem class too, **p_opt(N, machine) = the smallest p of the grid 0.75, 1, 1.414, 2, 3, 4, 6 with no broken chain in any of 200 reads**. It climbs the grid from the smallest p and stops as soon as one p meets the rule. The derivation of why p ≈ 3–4 is expected at large N is in [`../../prefactor_and_shimming.pdf`](../../prefactor_and_shimming.pdf).
 
 ## The commands (PowerShell; in bash write `F=results/sk`)
+
+All 4 problem classes, every N, and the whole budget. `--total` is the QPU time left in your Leap account **before** you start (check it in the Leap dashboard; ≈178 s). Pass the same value at every step: the time the campaign has already spent is read from its own results and subtracted.
 
 ```powershell
 $F = "results\sk"
 
-# setup: the list of N and how much to run per N (no QPU)
-python main_simulation.py init --preset full --out $F --Ns 8:160:8 --regimes sg_satisficing --n-instances 5 --num-reads 1000
+# setup: the list of N, all 4 problem classes, 5 instances each (no QPU)
+python main_simulation.py init --preset full --out $F --Ns 8:160:8 --n-instances 5
 
-# 0. how much QPU time steps 1 and 2 will cost (no QPU; prints whether it fits)
+# 0. predicted cost (no QPU)
 python main_simulation.py budget --out $F --total 178
 
-# 1. calibration: p_opt for every (N, machine)
-python main_simulation.py calibrate --out $F --budget-seconds 15
+# 1. calibration: p_opt for every (problem class, N, machine)
+python main_simulation.py calibrate --out $F --budget-seconds 55
 #    -> results\sk\calibration\p_opt.csv and p_opt.png; the table is stored in config.json
 
-# 2. the SK problems, every N with its own p_opt (refuses to start if some (N, machine) is not calibrated)
+# 1b. size the run to spend everything that is left (no QPU): sets num_reads in config.json
+python main_simulation.py budget --out $F --total 178 --fill
+
+# 2. the SK problems, every (class, N, machine) with its own p_opt
 python main_simulation.py run --out $F --check                    # estimate only
-python main_simulation.py run --out $F --budget-seconds 160
+python main_simulation.py run --out $F --total 178                # never spends more than 178 - what the campaign already spent
 
 # 3. results (no QPU; also printed at the end of step 2)
 python main_simulation.py report --out $F
@@ -50,8 +55,10 @@ python main_simulation.py report --out $F
 ```
 
 * `--Ns 8:160:8` means 8, 16, …, 160. Zephyr embeds the full SK problem up to N = 104, so larger N run on Pegasus only (up to 177). Both steps skip the N a machine cannot embed.
-* `--regimes sg_satisficing` keeps only the pure SK problem (ε = 0, J0 = 0). Without it all 4 problem classes run, and step 2 costs about 4× more.
-* If step 2 stops at its budget, rerun the same command: it continues from the next N. N are done in increasing order, both machines at each N.
+* **Why calibrate per problem class:** p_opt depends on the field the chains feel. The ferromagnetic class (J0 = 3) has fields about 3× larger in its ordered ground state, so it needs a larger p than the pure SK class. `run` uses, for every call, the p_opt of its own (class, N, machine). It refuses to start if one is missing.
+* **`budget --fill`** computes the reads per call that make step 2 spend: total − already spent − calibration still to do − 3 s margin (`--margin`). One call cannot exceed the QPU's 1 s limit, so the reads are capped at that, and the cap is printed. Run it after `calibrate`; before calibration, it reserves the worst-case calibration cost.
+* If a step stops at its budget, rerun the same command: it continues where it stopped. N are done in increasing order, all classes and both machines at each N.
+* To run only some classes: `init ... --regimes sg_satisficing` (pure SK) or `calibrate --problem eps0_J00`.
 
 ## What the output contains
 
@@ -69,11 +76,39 @@ python main_simulation.py report --out $F
 
 For N > 24 the reference needs the classical stage (`python main_simulation.py classical --out $F`, slow at large N; see README_LOCAL.md). Without it the QPU's configuration is reported, but not compared.
 
-## Budget (≈178 s left, to use by 4 November)
+## Step 4: compare (no QPU) — the planner question
 
-* Step 1: 13 N on Zephyr (8…104) + 20 N on Pegasus (8…160) = 33 (N, machine) pairs. At most 33 × 7 = 231 calls of ~55 ms, so **≤ 13 s**. Usually about half, because the climb stops at p_opt.
-* Step 2: the cost per (N, machine) is about 15.8 ms + reads × ~0.2 ms per call, times the number of instances. With 1 class, 5 instances and 1000 reads, all N on both machines take **≈ 40 s**. With all 4 classes it is ≈ 157 s.
-* `budget` prints the exact prediction from each solver's timing model. Change `--n-instances` / `--num-reads` in `init --force` until it fits.
+```powershell
+python main_simulation.py classical --out $F            # CPU only: classical solvers, the game, references
+python main_simulation.py compare   --out $F            # -> results\sk\compare\compare.csv, compare.png, reference_quality.png
+```
+
+The question: how well does the QPU act as the **central planner** (it picks every agent's choice so as to maximise the total reward)? It is compared with **classical planners** (greedy, SA, PT, τ-EO, SDP+GW, dimod SA/tabu) and with **no planner** (the game: agents learning on their own). Problem classes go from easy to hard: `eps0_J03` (ferromagnetic) → `eps0_J01` (boundary) → `eps0_J00`, `eps1_J00` (spin glass).
+
+**Reference.** For N ≤ n_exact (24) it is the exact optimum. Above that it is the **best reward found by any method**, which is not certified (grey band in the figure). `reference_quality.png` checks how plausible it is: for pure SK the mean ground-state reward should follow R(N) ≈ −2·(−0.7633 + 0.7·N^(−2/3)). That is the Parisi energy plus its finite-size correction.
+
+**Metrics.** A *sample* is one QPU read, one run of a classical solver, or one run of the game. The residual is ρ = (R_ref − R)/|R_ref|.
+
+| metric | meaning | useful when |
+|---|---|---|
+| `rho_best_median` | residual of the best sample, median over instances | every N |
+| `rho_typical_median` | residual of the median sample | every N: is a typical answer close? |
+| `P_rho_le_0` | fraction of samples that reach the reference exactly | small N; it decays exponentially with N for every heuristic, so above n_exact it is ≈ 0 and measured against an uncertified reference |
+| `P_rho_le_0.01` (also 0.02, 0.05) | fraction of samples within 1 % of the reference: **satisficing success** | every N: the primary metric |
+| `TTT99_0.01_s` | time to reach ρ ≤ 1 % once with 99 % probability = t·ln 0.01/ln(1−P) | time comparison. QPU t = anneal + readout + delay per read; `*_incl_programming` also counts the programming time; classical t = wall time of one run. Polished QPU reads have no TTT (polishing runs on the CPU) |
+
+ (≈178 s, all 4 classes)
+
+* **Calibration.** Zephyr N = 8…104 is 13 N; Pegasus N = 8…160 is 20 N, so 33 (N, machine) pairs. With 4 classes that is 132 calibrations.
+  * One call: ≈ 15.8 ms + 200 reads × 0.2 ms ≈ 55.8 ms.
+  * Upper bound, all 7 p: 132 × 7 × 0.0558 ≈ **51.6 s**.
+  * Expected, since the climb stops at p_opt ≈ 3 (the 5th value): 132 × 5 × 0.0558 ≈ **37 s**.
+* **Run, filled.** Left: 178 − 37 − 3 (margin) ≈ 138 s.
+  * Calls: 4 classes × 33 pairs × 5 instances = 660.
+  * Fixed part: 660 × 15.8 ms ≈ 10.4 s.
+  * Each read costs ≈ 0.2 ms per call, so 660 × 0.2 ms ≈ 0.132 s per read of every call.
+  * Reads per call: (138 − 10.4) / 0.132 ≈ **≈ 960** (the readout is longer for large N, so `--fill` will find somewhat fewer).
+* `budget` and `budget --fill` print the exact figures from each machine's timing model.
 
 ## Optional extras (not needed for the pipeline)
 * `shim` (flux-bias shimming) and `--extended-j-range`: see README_LOCAL.md and prefactor_and_shimming.pdf.

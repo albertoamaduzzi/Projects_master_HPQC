@@ -73,6 +73,7 @@ class CampaignConfig:
     backends: list = field(default_factory=lambda: ["qpu:zephyr:clique", "qpu:pegasus:clique"])
     chain_strength_prefactor: float = 1.414   # chain strength = prefactor x uniform torque compensation
     chain_strength_by_N: dict = field(default_factory=dict)   # {backend label: {N: p}} from coupling-scan
+    chain_strength_by_class: dict = field(default_factory=dict)  # {problem class: {backend label: {N: p}}}
     extended_j_range: bool = False  # chain couplers in the QPU's extended range (less compression)
     flux_biases_files: dict = field(default_factory=dict)     # {backend label: shims/.../fbos.json} from shim
     chain_break_method: str = "majority_vote"  # majority_vote | minimize_energy | weighted_random | discard
@@ -413,10 +414,9 @@ def stage_anneal(out: Path, cfg: CampaignConfig, spec: str = "sim:logical", keys
             break
         J = ensure_instances(out, cfg, key, eps, J0, N)
         P = PlannerProblem(J[b])
-        if cfg.chain_strength_by_N:                  # per-N prefactor chosen by coupling-scan
-            from coupling_scan import coupling_for
-            be.settings.chain_strength_prefactor = coupling_for(cfg.chain_strength_by_N, be.label, N,
-                                                                cfg.chain_strength_prefactor)
+        if cfg.chain_strength_by_N or cfg.chain_strength_by_class:   # p chosen by calibration / coupling-scan
+            from coupling_scan import prefactor_for
+            be.settings.chain_strength_prefactor = prefactor_for(cfg, be.label, key, N)
         for attempt in range(retries + 1):
             try:
                 res = be.sample(P, rng=np.random.SeedSequence([cfg.seed, 3, N, b]),
@@ -1126,9 +1126,9 @@ def describe_plan(out: Path, cfg: CampaignConfig, log=print) -> None:
     for i, (key, *_rest) in enumerate(classes):
         log(f"    --task {i}: {key}")
     qpu = [b for b in cfg.backends if b.startswith("qpu:")]
-    if cfg.chain_strength_by_N:
-        for lab, t in cfg.chain_strength_by_N.items():
-            log(f"  chain strength prefactor for {lab} by N (coupling-scan): " +
+    for key, tab in (cfg.chain_strength_by_class or {"(all classes)": cfg.chain_strength_by_N}).items():
+        for lab, t in (tab or {}).items():
+            log(f"  chain strength prefactor p_opt for {lab} {key} by N (calibration): " +
                 ", ".join(f"{k}: {v:g}" for k, v in sorted(t.items(), key=lambda kv: int(kv[0]))))
     log(f"  annealing back-ends: {cfg.backends}  (chain strength prefactor {cfg.chain_strength_prefactor}, "
         f"chain breaks: {cfg.chain_break_method}, polish: {cfg.polish})")
@@ -1229,16 +1229,27 @@ def main(argv=None) -> None:
     p.add_argument("--no-apply", action="store_true", help="do not use the offsets in later qpu calls")
     # ---- the linear QPU pipeline (pipeline.py): budget -> calibrate -> run -> report
     p = sub.add_parser("budget", parents=[common], help="PIPELINE 0: QPU time of calibrate + run (spends nothing)")
-    p.add_argument("--total", type=float, default=178.0, help="QPU seconds you have (default 178)")
+    p.add_argument("--total", type=float, default=178.0,
+                   help="QPU seconds you had when this campaign started (default 178); keep it fixed between steps")
+    p.add_argument("--fill", action="store_true",
+                   help="set num_reads so that the run spends everything left (stored in config.json)")
+    p.add_argument("--margin", type=float, default=3.0, help="seconds kept unspent by --fill (default 3)")
     p = sub.add_parser("calibrate", parents=[common], help="PIPELINE 1: p_opt for every (N, machine) of the config")
     p.add_argument("--budget-seconds", type=float)
     p.add_argument("--threshold", type=float, default=0.0, help="accepted fraction of broken chains (default 0)")
+    p.add_argument("--problem", nargs="+", help="only these problem classes (default: all of the config)")
     p.add_argument("--check", action="store_true", help="estimate only; spends nothing")
     p = sub.add_parser("run", parents=[common], help="PIPELINE 2: anneal every N with its p_opt, then report")
     p.add_argument("--budget-seconds", type=float)
     p.add_argument("--check", action="store_true", help="estimate only; spends nothing")
     p.add_argument("--allow-uncalibrated", action="store_true", help="interpolate p for N without calibration")
+    p.add_argument("--total", type=float,
+                   help="QPU seconds available when the campaign started: caps this run at total - already spent")
     sub.add_parser("report", parents=[common], help="PIPELINE 3: ground state, energy, reference per (machine, N)")
+    p = sub.add_parser("compare", parents=[common],
+                       help="PIPELINE 4: QPU planner vs classical solvers vs the game, easy -> hard (no QPU)")
+    p.add_argument("--deltas", nargs="+", type=float, default=[0.0, 0.01, 0.02, 0.05],
+                   help="residual thresholds for the success probabilities (0 = exact)")
     p = sub.add_parser("scan-summary", help="compare campaigns differing only in annealing settings (no QPU)")
     p.add_argument("--dirs", nargs="+", required=True, type=Path)
     sub.add_parser("validate", parents=[common],
@@ -1306,14 +1317,21 @@ def main(argv=None) -> None:
         ground_states(out, cfg)
     elif a.cmd == "validate":
         validate(out, cfg)
-    elif a.cmd in ("budget", "calibrate", "run", "report"):
+    elif a.cmd in ("budget", "calibrate", "run", "report", "compare"):
         import pipeline
-        if a.cmd == "budget":
-            pipeline.budget(out, cfg, total=a.total)
+        if a.cmd == "compare":
+            pipeline.compare(out, cfg, deltas=tuple(a.deltas))
+        elif a.cmd == "budget":
+            pipeline.budget(out, cfg, total=a.total, fill=a.fill, margin=a.margin)
         elif a.cmd == "calibrate":
-            pipeline.calibrate(out, cfg, budget_s=a.budget_seconds, check=a.check, threshold=a.threshold)
+            pipeline.calibrate(out, cfg, budget_s=a.budget_seconds, check=a.check, threshold=a.threshold, keys=a.problem)
         elif a.cmd == "run":
-            pipeline.run(out, cfg, budget_s=a.budget_seconds, check=a.check, allow_uncalibrated=a.allow_uncalibrated)
+            bs = a.budget_seconds
+            if a.total is not None:
+                left = a.total - sum(pipeline.spent_in_campaign(out).values())
+                print(f"[run] --total {a.total:g}: {left:.2f} s left for this run")
+                bs = left if bs is None else min(bs, left)
+            pipeline.run(out, cfg, budget_s=bs, check=a.check, allow_uncalibrated=a.allow_uncalibrated)
         else:
             pipeline.report(out, cfg)
     elif a.cmd == "shim":

@@ -23,7 +23,7 @@ cd Projects_master_HPQC/scripts/QuantumComputing/Dimod/src/unlearnable_games_exp
 ## 2. Environment (once)
 
 ```bash
-bash local/setup_env.sh               # creates .venv, installs cineca/requirements.txt, runs the 120 tests
+bash local/setup_env.sh               # creates .venv, installs cineca/requirements.txt, runs the 122 tests
 WITH_NB=1 bash local/setup_env.sh     # alternatively: + Jupyter, for the notebook
 source .venv/bin/activate             # in every new terminal
 ```
