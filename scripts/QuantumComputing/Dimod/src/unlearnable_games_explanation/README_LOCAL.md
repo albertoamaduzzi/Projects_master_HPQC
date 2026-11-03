@@ -23,7 +23,7 @@ cd Projects_master_HPQC/scripts/QuantumComputing/Dimod/src/unlearnable_games_exp
 ## 2. Environment (once)
 
 ```bash
-bash local/setup_env.sh               # creates .venv, installs cineca/requirements.txt, runs the 128 tests
+bash local/setup_env.sh               # creates .venv, installs cineca/requirements.txt, runs the 129 tests
 WITH_NB=1 bash local/setup_env.sh     # alternatively: + Jupyter, for the notebook
 source .venv/bin/activate             # in every new terminal
 ```
@@ -168,6 +168,8 @@ In `shim_history.png` the magnetisation should fall to the dashed line 1/√read
 python -m dwave_utils coupling-scan --out $F --Ns 8:48:8 104 --prefactors 0.75 1.0 1.414 2.0 3.0 4.0 6.0 --check
 python -m dwave_utils coupling-scan --out $F --Ns 8:48:8 104 --budget-seconds 7
 python -m dwave_utils coupling-scan --out $F --summary-only        # recompute the choice from saved results
+python -m dwave_utils coupling-scan --out $F --analysis t001 --threshold 0.01   # another reading (1 % broken chains allowed),
+#   written to coupling_scan\analysis_t001\ only: the main summary and config.json are not touched
 ```
 
 ### 4.6b Measure the machine: σ and β_eff (no QPU)
