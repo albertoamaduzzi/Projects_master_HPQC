@@ -1227,6 +1227,8 @@ def main(argv=None) -> None:
     p.add_argument("--budget-seconds", type=float, help="hard cap on the QPU time of this scan")
     p.add_argument("--check", action="store_true", help="estimate the QPU time; spends nothing")
     p.add_argument("--summary-only", action="store_true", help="only (re)compute the choice from saved results")
+    p.add_argument("--analysis", help="write this reading to coupling_scan/analysis_<NAME>/ only (implies --no-apply): "
+                                      "overwrites neither the main summary nor config.json")
     p.add_argument("--no-apply", action="store_true", help="do not store the chosen values in config.json")
     p = sub.add_parser("shim", parents=[common], help="flux-bias shimming of a QPU on the SK problem (tutorial / Teza et al.)")
     p.add_argument("--backend", required=True, help="e.g. qpu:zephyr:clique")
@@ -1391,8 +1393,8 @@ def main(argv=None) -> None:
                               apply=not a.no_apply)
     elif a.cmd == "coupling-scan":
         from dwave_utils import coupling_scan as cs
-        if a.summary_only:
-            cs.summarize_coupling_scan(out, cfg, threshold=a.threshold, apply=not a.no_apply)
+        if a.summary_only or a.analysis:            # --analysis only re-reads saved results: no QPU
+            cs.summarize_coupling_scan(out, cfg, threshold=a.threshold, apply=not a.no_apply, analysis=a.analysis)
         else:
             Ns = sorted({n for group in (a.Ns or [[n for n in cfg.Ns if n <= 48]]) for n in group})
             cs.find_best_coupling_per_problem(out, cfg, Ns, prefactors=a.prefactors, specs=a.backend, keys=a.problem,

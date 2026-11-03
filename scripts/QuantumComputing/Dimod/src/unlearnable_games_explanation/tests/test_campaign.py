@@ -438,3 +438,22 @@ def test_noise_fit_on_mock_campaign_and_feasibility_from_fit(tmp_path, monkeypat
     ms.main(["feasibility", "--topology", "zephyr", "--N", "16", "--instances", "2", "--from-fit", str(out)])
     printed = capsys.readouterr().out
     assert "measured on zephyr" in printed and "verdict" in printed
+
+
+def test_coupling_scan_analysis_overwrites_nothing(tmp_path, monkeypatch):
+    """--analysis NAME: an alternative threshold written to its own folder; main summary and config untouched."""
+    import dwave.system
+    from dwave.system.testing import MockDWaveSampler
+    monkeypatch.setattr(dwave.system, "DWaveSampler",
+                        lambda solver=None, **kw: MockDWaveSampler(topology_type="zephyr", topology_shape=[3, 4]))
+    out = tmp_path / "an"
+    ms.main(["init", "--out", str(out), "--Ns", "8,12", "--n-instances", "1", "--regimes", "sg_satisficing",
+             "--backends", "qpu:zephyr:clique"])
+    ms.main(["calibrate", "--out", str(out)])
+    root = out / "coupling_scan"
+    before = {f: f.read_bytes() for f in [root / "coupling_scan.csv", root / "best_coupling.json", out / "config.json"]}
+    ms.main(["coupling-scan", "--out", str(out), "--analysis", "t001", "--threshold", "0.01"])
+    for f, b in before.items():
+        assert f.read_bytes() == b, f
+    an = json.loads((root / "analysis_t001" / "best_coupling.json").read_text())
+    assert an["threshold"] == 0.01 and (root / "analysis_t001" / "coupling_scan.csv").exists()

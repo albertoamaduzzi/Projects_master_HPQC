@@ -164,7 +164,10 @@ def _mean_broken(res) -> float:
     return sum(int(k) * v for k, v in h.items()) / max(1, sum(h.values()))
 
 
-def summarize_coupling_scan(out: Path, cfg, threshold: float = 0.0, apply: bool = True, log=print) -> dict:
+def summarize_coupling_scan(out: Path, cfg, threshold: float = 0.0, apply: bool = True, log=print,
+                            analysis: str | None = None) -> dict:
+    """With `analysis="name"`, everything goes to <out>/coupling_scan/analysis_<name>/ and config.json is
+    left alone: an alternative reading (e.g. another threshold) that overwrites nothing."""
     """Read every scan result, choose p per (back-end, N), write table/curves, store in config."""
     import main_simulation as ms
     root = out / "coupling_scan"
@@ -216,17 +219,21 @@ def summarize_coupling_scan(out: Path, cfg, threshold: float = 0.0, apply: bool 
         log("[coupling] no scan results yet")
         return {}
     root.mkdir(parents=True, exist_ok=True)
-    with open(root / "coupling_scan.csv", "w", newline="") as f:
+    dest = root / f"analysis_{analysis}" if analysis else root
+    if analysis:
+        apply = False
+    dest.mkdir(parents=True, exist_ok=True)
+    with open(dest / "coupling_scan.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
     payload = {"rule": f"smallest p with broken-chain fraction <= {threshold:g}, else fewest broken chains",
                "threshold": threshold, "best": best, "by_class": by_class,
                "use": "N between scanned values: linear interpolation; beyond: nearest scanned value"}
-    ms._write_json(root / "best_coupling.json", payload)
+    ms._write_json(dest / "best_coupling.json", payload)
     for key in by_class:
         sel = [r for r in rows if r["problem"] == key]
-        _plot(root, sel, by_class[key], name="coupling_scan.png" if key == main_key else f"coupling_scan_{key}.png")
+        _plot(dest, sel, by_class[key], name="coupling_scan.png" if key == main_key else f"coupling_scan_{key}.png")
         for lab, t in by_class[key].items():
             log(f"[coupling] best prefactor for {lab} {key}: " + ", ".join(f"N={k}: p={v:g}" for k, v in t.items()))
             for r in sel:
@@ -235,7 +242,8 @@ def summarize_coupling_scan(out: Path, cfg, threshold: float = 0.0, apply: bool 
     if apply:
         ms.update_config(out, cfg, chain_strength_by_N=best, chain_strength_by_class=by_class)
         log(f"[coupling] stored in {out / 'config.json'} (chain_strength_by_N): `qpu` now uses these values")
-    log(f"[coupling] -> {root / 'coupling_scan.csv'}, {root / 'coupling_scan.png'}, {root / 'best_coupling.json'}")
+    log(f"[coupling] -> {dest / 'coupling_scan.csv'}, {dest / 'coupling_scan.png'}, {dest / 'best_coupling.json'}"
+        + ("  (separate analysis: config.json and the main summary untouched)" if analysis else ""))
     return best
 
 
