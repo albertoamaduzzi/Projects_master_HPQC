@@ -3,6 +3,7 @@
 | | |
 |---|---|
 | [`src/unlearnable_games_explanation/PIPELINE.md`](src/unlearnable_games_explanation/PIPELINE.md) | **running on the QPU**: the four commands in order (budget, calibrate p_opt per N and machine, run, report) and what each output contains |
+| [`RUN_LOG_2026-11.md`](RUN_LOG_2026-11.md) | **the November QPU runs**: every command launched, what it wrote or changed, the QPU time, what each experiment showed (calibration, annealing time, extended range, many reads) and the post-processing commands |
 | [`LESSONS_all_to_all_annealing.md`](LESSONS_all_to_all_annealing.md) | **what we learnt**: the limits of quantum annealers on all-to-all problems (chains, fixed full scale, control error, temperature, the window for the chain strength), how to measure success honestly, and a decision rule |
 | [`explanation_project.pdf`](explanation_project.pdf) | **start here**: the whole project explained, with all the figures (source: `src/visualization/explanation_project/explanation_project.tex`, rebuild with `bash src/visualization/explanation_project/build.sh`) |
 | [`dwave_in_the_code.pdf`](dwave_in_the_code.pdf) | how the code uses D-Wave: Ocean functions and their capabilities, modes of use, `qpu --check`, time estimates, the `--budget-seconds` guard, the 1-second test (source: `src/visualization/explanation_project/dwave_in_the_code.tex`) |
